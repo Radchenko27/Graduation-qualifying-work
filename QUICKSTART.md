@@ -3,12 +3,10 @@
 ## Требования
 
 - **Docker Desktop** версии 20.10+ (с включённым Docker Compose)
+- **Python** 3.12+
 - **PowerShell** или **Command Prompt (cmd)**
 
-> 💡 **Рекомендация:** Установите `make` для удобства:
-> - Через **Chocolatey**: `choco install make`
-> - Через **Winget**: `winget install GnuWin32.Make`
-> - Или используйте команды `docker-compose` напрямую (см. ниже)
+> 💡 **Архитектура:** PostgreSQL и MinIO в Docker контейнерах, FastAPI с фронтендом локально
 
 ---
 
@@ -16,104 +14,66 @@
 
 ### Шаг 1: Подготовка окружения
 
-Откройте **PowerShell** или **Command Prompt** в папке проекта:
+Откройте **PowerShell** в папке проекта:
 
-```cmd
-:: Клонировать репозиторий (выполните в Git Bash или PowerShell)
-git clone <репозиторий>
-cd <папка проекта>
+```powershell
+# Перейти в папку проекта
+cd C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work
 
-:: Создать файл переменных окружения (опционально)
-:: По умолчанию используются тестовые значения из docker-compose.yml
-copy .env.example .env
+# Активировать виртуальное окружение (если используется)
+.\venv\Scripts\Activate.ps1
+
+# Установить зависимости
+pip install -r requirements.txt
 ```
 
-### Шаг 2: Сборка Docker образов
+### Шаг 2: Запуск инфраструктуры (PostgreSQL + MinIO)
 
-```cmd
-:: Вариант А: через make (если установлен)
-make build
+**Вариант А: Автоматический запуск (рекомендуется)**
 
-:: Вариант Б: через docker-compose (PowerShell)
-docker-compose build
-
-:: Вариант В: через docker-compose (cmd)
-docker-compose build
+```powershell
+# Запустить PostgreSQL и MinIO, применить миграции
+.\scripts\start_infra.ps1
 ```
 
-### Шаг 3: Запуск инфраструктуры (PostgreSQL + MinIO + App)
+**Вариант Б: Ручной запуск**
 
-```cmd
-:: Вариант А: через make
-make up
+```powershell
+# Запустить только PostgreSQL и MinIO (без FastAPI)
+docker-compose up -d db minio
 
-:: Вариант Б: через docker-compose
-docker-compose up -d
+# Дождаться готовности (5-10 секунд)
+Start-Sleep -Seconds 10
 
-:: Проверить статус всех сервисов
-docker-compose ps
+# Применить миграции
+alembic upgrade head
+
+# Инициализировать тестовые данные
+python scripts/init_db.py
 ```
 
-**После запуска будут доступны:**
-- 🌐 **API** — http://localhost:8000
-- 📚 **Swagger UI** — http://localhost:8000/docs  
-- 📦 **MinIO Console** — http://localhost:9001 (логин: `minioadmin` / пароль: `minioadmin_password`)
-- 🗄️ **PostgreSQL** — localhost:5432
+### Шаг 3: Запуск FastAPI с фронтендом
 
-### Шаг 4: Применение миграций базы данных
+**В новом окне PowerShell:**
 
-```cmd
-:: Вариант А: через make
-make migrate
+```powershell
+# Запуск с автоперезагрузкой (для разработки)
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
-:: Вариант Б: через docker-compose
-docker-compose exec app alembic upgrade head
-
-:: Вариант В: через docker
-docker exec fastapi_app alembic upgrade head
-```
-
-**Проверить статус миграций:**
-```cmd
-docker-compose exec app alembic current
-```
-
-### Шаг 5: Инициализация базы данных (тестовые данные)
-
-```cmd
-:: Вариант А: через make
-make init-db
-
-:: Вариант Б: через docker-compose
-docker-compose exec app python scripts/init_db.py
-```
-
-### Шаг 6: Проверка работоспособности
-
-```cmd
-:: Вариант А: через make
-make health-check
-
-:: Вариант Б: вручную (PowerShell)
-Invoke-WebRequest -Uri http://localhost:8000/health
-
-:: Вариант В: вручную (cmd)
-curl http://localhost:8000/health
-
-:: Проверить логи
-docker-compose logs -f
+# Или без автоперезагрузки (для production)
+uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 ---
 
 ## ⚡ Быстрый запуск (все команды вместе)
 
-```cmd
-:: Выполнить последовательно:
-docker-compose build
-docker-compose up -d
-docker-compose exec app alembic upgrade head
-docker-compose exec app python scripts/init_db.py
+```powershell
+# 1. Запустить инфраструктуру
+.\scripts\start_infra.ps1
+
+# 2. В новом окне запустить FastAPI
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
 ---
@@ -122,115 +82,172 @@ docker-compose exec app python scripts/init_db.py
 
 | Сервис | URL | Логин/Пароль |
 |--------|-----|--------------|
-| API | http://localhost:8000 | - |
-| Документация API | http://localhost:8000/docs | - |
-| MinIO Console | http://localhost:9001 | minioadmin / minioadmin_password |
-| PostgreSQL | localhost:5432 | postgres / postgres_password |
+| **Веб-интерфейс** | http://localhost:8000 | - |
+| **API Swagger** | http://localhost:8000/docs | - |
+| **MinIO Console** | http://localhost:9001 | minioadmin / minioadmin_password |
+| **PostgreSQL** | localhost:5432 | postgres / postgres_password |
+
+## Локальный запуск (без Docker)
+
+```powershell
+# Установка зависимостей
+pip install -r requirements.txt
+
+# Применение миграций
+alembic upgrade head
+
+# Запуск приложения
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+## Запуск тестов
+
+```powershell
+# Установка pytest (если ещё не установлен)
+pip install pytest pytest-cov
+
+# Запуск всех тестов
+pytest
+
+# Запуск с покрытием
+pytest --cov=app
+
+# Запуск конкретных тестов
+pytest tests/test_api.py::TestUsersAPI -v
+```
+
+## Управление сервисами
+
+### Остановка инфраструктуры
+
+```powershell
+# Остановить PostgreSQL и MinIO
+.\scripts\stop_infra.ps1
+
+# Или вручную
+docker-compose stop db minio
+```
+
+### Перезапуск
+
+```powershell
+# Остановить
+docker-compose stop db minio
+
+# Запустить заново
+.\scripts\start_infra.ps1
+```
+
+### Просмотр логов
+
+```powershell
+# Логи PostgreSQL
+docker-compose logs -f db
+
+# Логи MinIO
+docker-compose logs -f minio
+
+# Логи FastAPI (в процессе запуска uvicorn)
+```
+
+---
 
 ## Тестовые пользователи
 
 После инициализации базы данных будут созданы тестовые пользователи:
 
-| Username | Password | Session Key |
-|----------|----------|-------------|
-| ivan.petrov | password123 | session_key_ivan.petrov |
-| maria.sidorova | password123 | session_key_maria.sidorova |
-| alexey.kozlov | password123 | session_key_alexey.kozlov |
+| Username | Password |
+|----------|----------|
+| ivan.petrov | password123 |
+| maria.sidorova | password123 |
+| alexey.kozlov | password123 |
 
-## Пример запроса с аутентификацией
-
-```cmd
-:: PowerShell
-Invoke-RestMethod -Uri "http://localhost:8000/api/users/1" -Headers @{"X-Session-Key"="session_key_ivan.petrov"}
-
-:: cmd
-curl -X GET "http://localhost:8000/api/users/1" -H "X-Session-Key: session_key_ivan.petrov"
-```
-
-## Основные команды
-
-| Команда make | Команда docker-compose | Описание |
-|--------------|------------------------|----------|
-| `make up` | `docker-compose up -d` | Запустить сервисы |
-| `make down` | `docker-compose down` | Остановить сервисы |
-| `make logs` | `docker-compose logs -f` | Показать логи |
-| `make logs-app` | `docker-compose logs -f app` | Логи приложения |
-| `make db-shell` | `docker-compose exec db psql -U postgres -d construction_docs` | Подключиться к PostgreSQL |
-| `make migrate` | `docker-compose exec app alembic upgrade head` | Применить миграции |
-| `make migrate-status` | `docker-compose exec app alembic current` | Статус миграций |
-| `make health-check` | `docker-compose exec app python scripts/health_check.py` | Проверить работоспособность |
-| `make clean` | `docker-compose down -v` | Удалить все данные (осторожно!) |
-
-## Структура проекта
-
-```
-.
-├── app/                    # Приложение FastAPI
-│   ├── models.py          # SQLAlchemy модели
-│   ├── schemas.py         # Pydantic схемы
-│   ├── crud.py            # CRUD операции
-│   ├── routers/           # API роутеры
-│   ├── storage.py         # MinIO клиент
-│   └── dependencies.py    # Зависимости
-├── alembic/               # Миграции БД
-├── scripts/               # Скрипты
-│   ├── init_db.py        # Инициализация БД
-│   └── health_check.py   # Проверка работоспособности
-├── docker-compose.yml     # Docker Compose конфигурация
-├── Dockerfile             # Docker образ приложения
-├── Makefile               # Удобные команды
-└── .env                   # Переменные окружения
-```
-
-## Следующие шаги
-
-1. Изучите [DEPLOYMENT.md](DEPLOYMENT.md) для подробной информации
-2. Откройте http://localhost:8000/docs для интерактивной документации API
+---
 
 ## Устранение проблем
 
-### Сервисы не запускаются
+### Конфликт портов
 
-```cmd
-:: Проверить логи
-docker-compose logs -f
+Если порт 5432 или 9000 занят:
 
-:: Перезапустить
-docker-compose restart
+```powershell
+# Проверить, кто использует порт
+netstat -ano | findstr :5432
+netstat -ano | findstr :9000
+
+# Остановить конфликтующие процессы
+Stop-Process -Id <PID> -Force
 ```
 
-### База данных не инициализируется
+### PostgreSQL не подключается
 
-```cmd
-:: Проверить миграции
-docker-compose exec app alembic current
+```powershell
+# Проверить статус контейнера
+docker-compose ps db
 
-:: Применить миграции
-docker-compose exec app alembic upgrade head
+# Перезапустить
+docker-compose restart db
 
-:: Инициализировать заново
-docker-compose exec app python scripts/init_db.py
+# Проверить логи
+docker-compose logs db
 ```
 
 ### MinIO недоступен
 
-```cmd
-:: Проверить статус
+```powershell
+# Проверить статус
 docker-compose ps minio
 
-:: Перезапустить MinIO
+# Перезапустить
 docker-compose restart minio
+
+# Открыть консоль MinIO
+Start-Process http://localhost:9001
 ```
 
-### Docker Desktop не запущен
+### Базa данных не инициализируется
 
-Убедитесь, что **Docker Desktop** запущен (иконка в системном трее).
+```powershell
+# Применить миграции вручную
+alembic upgrade head
+
+# Проверить статус миграций
+alembic current
+
+# Инициализировать тестовые данные
+python scripts/init_db.py
+```
+
+---
+
+## Полезные команды Docker
+
+```powershell
+# Статус всех контейнеров
+docker-compose ps
+
+# Список всех контейнеров (включая остановленные)
+docker ps -a
+
+# Остановить все контейнеры
+docker-compose stop
+
+# Удалить все контейнеры и данные (ОСТОРОЖНО!)
+docker-compose down -v
+```
 
 ---
 
 ## Полезные ссылки
 
 - [FastAPI Documentation](https://fastapi.tiangolo.com/)
+- [Jinja2 Templates](https://jinja.palletsprojects.com/)
 - [PostgreSQL Documentation](https://www.postgresql.org/docs/)
 - [MinIO Documentation](https://min.io/docs/minio/linux/index.html)
 - [Docker Documentation](https://docs.docker.com/)
+
+## Дополнительные документы
+
+- [FRONTEND_README.md](FRONTEND_README.md) — Подробно о фронтенде и тестах
+- [DEPLOYMENT.md](DEPLOYMENT.md) — Развёртывание в production
+- [MINIO_SETUP.md](MINIO_SETUP.md) — Настройка MinIO

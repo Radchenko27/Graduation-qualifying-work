@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block title %}Пользователи{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Пользователи системы</h1>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <div class="search-box">
+            <input type="text" id="searchInput" class="form-control" placeholder="Поиск по имени, username или ФИО...">
+            <button id="searchBtn" class="btn btn-primary">Найти</button>
+            <button id="clearBtn" class="btn btn-secondary">Очистить</button>
+        </div>
+    </div>
+    
+    <div class="card-body">
+        <div id="loading" style="display: none; text-align: center; padding: 2rem;">
+            <p>Загрузка...</p>
+        </div>
+        
+        <div id="error" style="display: none; text-align: center; padding: 2rem; color: #dc3545;">
+            <p>Произошла ошибка при загрузке пользователей</p>
+        </div>
+        
+        <div id="noResults" style="display: none; text-align: center; padding: 2rem; color: #6c757d;">
+            <p>Пользователи не найдены</p>
+        </div>
+        
+        <div id="usersCards" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem;">
+            <!-- Карточки пользователей будут загружены через JavaScript -->
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allUsers = [];
+
+// Загрузка пользователей при загрузке страницы
+document.addEventListener('DOMContentLoaded', () => {
+    loadUsers();
+});
+
+// Загрузить всех пользователей
+async function loadUsers() {
+    console.log('loadUsers called');
+    showLoading();
+    
+    try {
+        console.log('Fetching /api/users/...');
+        // Используем относительный URL с credentials для отправки cookie
+        const response = await fetch('/api/users/', {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        console.log('Response status:', response.status);
+        
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки: ' + response.status);
+        }
+        
+        allUsers = await response.json();
+        console.log('Users loaded:', allUsers);
+        displayUsersAsCards(allUsers);
+    } catch (error) {
+        console.error('Error loading users:', error);
+        showError('Не удалось загрузить пользователей. ' + error.message);
+    }
+}
+
+// Поиск пользователей
+async function searchUsers(query) {
+    showLoading();
+    
+    try {
+        const response = await fetch(`/api/users/search?q=${encodeURIComponent(query)}`, {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Ошибка поиска: ' + response.status);
+        }
+        
+        const users = await response.json();
+        displayUsersAsCards(users);
+    } catch (error) {
+        console.error('Error searching users:', error);
+        showError('Не удалось выполнить поиск. ' + error.message);
+    }
+}
+
+// Отобразить пользователей в виде карточек
+function displayUsersAsCards(users) {
+    hideAll();
+    
+    if (users.length === 0) {
+        document.getElementById('noResults').style.display = 'block';
+        return;
+    }
+    
+    const container = document.getElementById('usersCards');
+    container.innerHTML = '';
+    
+    users.forEach(user => {
+        const card = document.createElement('div');
+        card.className = 'user-card';
+        card.innerHTML = `
+            <div class="user-card-header">
+                <div class="user-avatar">
+                    ${user.first_name ? user.first_name[0] : 'U'}
+                    ${user.last_name ? user.last_name[0] : ''}
+                </div>
+                <div class="user-card-title">
+                    <strong>${escapeHtml(user.username)}</strong>
+                </div>
+            </div>
+            <div class="user-card-body">
+                <div class="user-info-row">
+                    <span class="user-info-label">ФИО:</span>
+                    <span class="user-info-value">${escapeHtml(user.first_name)} ${user.middle_name ? escapeHtml(user.middle_name) + ' ' : ''}${escapeHtml(user.last_name)}</span>
+                </div>
+                ${user.email ? `
+                <div class="user-info-row">
+                    <span class="user-info-label">Email:</span>
+                    <span class="user-info-value">${escapeHtml(user.email)}</span>
+                </div>
+                ` : ''}
+                ${user.phone ? `
+                <div class="user-info-row">
+                    <span class="user-info-label">Телефон:</span>
+                    <span class="user-info-value">${escapeHtml(user.phone)}</span>
+                </div>
+                ` : ''}
+            </div>
+            <div class="user-card-footer">
+                <button class="btn btn-sm btn-primary" onclick="viewUser(${user.id})">
+                    Просмотр профиля
+                </button>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+}
+
+// Просмотр пользователя
+function viewUser(userId) {
+    window.location.href = `/profile?user_id=${userId}`;
+}
+
+// Поиск по нажатию Enter
+document.getElementById('searchInput').addEventListener('keypress', (e) => {
+    if (e.key === 'Enter') {
+        const query = e.target.value.trim();
+        if (query) {
+            searchUsers(query);
+        }
+    }
+});
+
+// Кнопка поиска
+document.getElementById('searchBtn').addEventListener('click', () => {
+    const query = document.getElementById('searchInput').value.trim();
+    if (query) {
+        searchUsers(query);
+    }
+});
+
+// Кнопка очистки
+document.getElementById('clearBtn').addEventListener('click', () => {
+    document.getElementById('searchInput').value = '';
+    loadUsers();
+});
+
+// Утилита для экранирования HTML
+function escapeHtml(text) {
+    if (!text) return '';
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Показ/скрытие элементов
+function showLoading() {
+    hideAll();
+    const loading = document.getElementById('loading');
+    const usersCards = document.getElementById('usersCards');
+    if (loading) loading.style.display = 'block';
+    if (usersCards) usersCards.style.display = 'none';
+}
+
+function showError(message) {
+    hideAll();
+    const error = document.getElementById('error');
+    const usersCards = document.getElementById('usersCards');
+    if (error) {
+        const p = error.querySelector('p');
+        if (p) p.textContent = message;
+        error.style.display = 'block';
+    }
+    if (usersCards) usersCards.style.display = 'none';
+}
+
+function hideAll() {
+    const loading = document.getElementById('loading');
+    const error = document.getElementById('error');
+    const noResults = document.getElementById('noResults');
+    const usersCards = document.getElementById('usersCards');
+    
+    if (loading) loading.style.display = 'none';
+    if (error) error.style.display = 'none';
+    if (noResults) noResults.style.display = 'none';
+    if (usersCards) usersCards.style.display = 'grid';
+}
+</script>
+{% endblock %}

@@ -57,12 +57,16 @@ def get_auth_session(
     return auth_session
 
 
-def get_current_user(auth_session: models.AuthSession = Depends(get_auth_session)) -> models.User:
+def get_current_user(
+    auth_session: models.AuthSession = Depends(get_auth_session),
+    db_session: Session = Depends(db.get_db)
+) -> models.User:
     """
     Получить текущего пользователя из сессии
     
     Args:
         auth_session: Объект AuthSession
+        db_session: Сессия базы данных
         
     Returns:
         Объект User
@@ -70,7 +74,7 @@ def get_current_user(auth_session: models.AuthSession = Depends(get_auth_session
     Raises:
         HTTPException: Если пользователь не найден
     """
-    user = crud.Users.get_by_id(auth_session.user_id)
+    user = crud.Users.get_by_id(db_session, auth_session.user_id)
     if not user:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -177,3 +181,39 @@ def revoke_all_user_sessions(user_id: int, db_session: Session) -> int:
     ).delete()
     db_session.commit()
     return count
+
+
+def get_current_user_optional(
+    session_key: str = Header(None, alias="X-Session-Key"),
+    session_key_cookie: str = Cookie(None, alias="session_key"),
+    db_session: Session = Depends(db.get_db)
+) -> models.User | None:
+    """
+    Получить текущего пользователя, если сессия валидна
+    Возвращает None если сессии нет или она невалидна (не выбрасывает ошибку)
+    
+    Args:
+        session_key: Ключ сессии из заголовка
+        session_key_cookie: Ключ сессии из cookie
+        db_session: Сессия базы данных
+        
+    Returns:
+        Объект User или None
+    """
+    key = session_key_cookie or session_key
+    
+    if not key:
+        return None
+    
+    auth_session = db_session.query(models.AuthSession).filter(
+        models.AuthSession.session_key == key
+    ).first()
+    
+    if not auth_session:
+        return None
+    
+    if datetime.utcnow() > auth_session.expires_at:
+        return None
+    
+    user = crud.Users.get_by_id(db_session, auth_session.user_id)
+    return user

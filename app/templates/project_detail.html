@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}{{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="card-header" style="margin-bottom: 1rem;">
+    <div>
+        <h2 class="card-title">{{ project.name }}</h2>
+        <p style="color: #666; margin-top: 0.5rem;">{{ project.description }}</p>
+    </div>
+    <a href="/projects" class="btn btn-secondary">Назад</a>
+</div>
+
+<div class="grid">
+    <div class="card">
+        <h3 style="margin-bottom: 1rem;">Документы</h3>
+        <a href="/projects/{{ project.id }}/documents" class="btn btn-primary" style="width: 100%;">Управление документами</a>
+    </div>
+    
+    <div class="card">
+        <h3 style="margin-bottom: 1rem;">Чертежи и расчёты</h3>
+        <a href="/projects/{{ project.id }}/calculations" class="btn btn-primary" style="width: 100%;">Расчёты элементов</a>
+    </div>
+    
+    <div class="card">
+        <h3 style="margin-bottom: 1rem;">Сметы</h3>
+        <a href="/projects/{{ project.id }}/estimates" class="btn btn-primary" style="width: 100%;">Управление сметами</a>
+    </div>
+    
+    <div class="card">
+        <h3 style="margin-bottom: 1rem;">Участники</h3>
+        <a href="/projects/{{ project.id }}/users" class="btn btn-primary" style="width: 100%;">Управление доступом</a>
+    </div>
+</div>
+{% endblock %}

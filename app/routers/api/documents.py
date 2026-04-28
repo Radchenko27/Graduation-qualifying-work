@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 from typing import List
 from datetime import date
 
-from .. import crud, schemas, db, models
-from ..dependencies import get_current_user
+from ... import crud, schemas, db, models
+from ...dependencies import get_current_user
 
 router = APIRouter()
 
@@ -103,28 +103,6 @@ def update_document(
     document_data = document.model_dump()
     
     return crud.Documents.update(db, db_document, document_data)
-
-
-@router.patch("/{document_id}/category", response_model=schemas.DocumentRead)
-def update_document_category(
-    document_id: int,
-    category_update: schemas.DocumentCategoryUpdate,
-    current_user: models.User = Depends(get_current_user),
-    db: Session = Depends(db.get_db)
-):
-    """
-    Классификация документа по категории
-
-    Требует аутентификации
-    """
-    db_document = crud.Documents.get(db, document_id)
-    if db_document is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Document not found"
-        )
-    
-    return crud.Documents.update(db, db_document, {"category": category_update.category})
 
 
 @router.delete("/{document_id}", status_code=status.HTTP_204_NO_CONTENT)

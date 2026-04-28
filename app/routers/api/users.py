@@ -3,8 +3,8 @@ from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime
 
-from .. import crud, schemas, db, models
-from ..dependencies import (
+from ... import crud, schemas, db, models
+from ...dependencies import (
     create_auth_session,
     revoke_auth_session,
     revoke_all_user_sessions,

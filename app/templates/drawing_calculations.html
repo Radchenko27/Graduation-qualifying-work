@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+
+{% block title %}Расчёты элементов чертежей{% endblock %}
+
+{% block content %}
+<div class="card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h2 class="card-title">Расчёты элементов чертежей</h2>
+    <button class="btn btn-primary" onclick="openModal('createCalcModal')">+ Новый расчёт</button>
+</div>
+
+<div class="card">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Элемент</th>
+                <th>Чертёж</th>
+                <th>Страница</th>
+                <th>Расчёт</th>
+                <th>Дата</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody id="calculationsTable">
+            {% for calc in calculations %}
+            <tr>
+                <td><strong>{{ calc.element_name }}</strong></td>
+                <td>{{ calc.drawing_name or '-' }}</td>
+                <td>{{ calc.page_number or '-' }}</td>
+                <td>
+                    <pre style="background: #f8f9fa; padding: 0.5rem; border-radius: 4px; font-size: 0.85rem; max-height: 100px; overflow-y: auto;">{{ calc.calculations_text[:100] }}{% if calc.calculations_text|length > 100 %}...{% endif %}</pre>
+                </td>
+                <td>{{ calc.created_at[:10] if calc.created_at else '-' }}</td>
+                <td class="table-actions">
+                    <button class="btn btn-primary btn-sm" onclick="viewCalculation({{ calc.id }})">Просмотр</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteCalculation({{ calc.id }})">Удалить</button>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6" style="text-align: center; padding: 2rem;">Расчётов нет</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Модальное окно создания расчёта -->
+<div id="createCalcModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Создать расчёт</h3>
+            <button class="modal-close" onclick="closeModal('createCalcModal')">&times;</button>
+        </div>
+        <form id="createCalcForm">
+            <div class="form-group">
+                <label for="elementName">Название элемента</label>
+                <input type="text" id="elementName" name="element_name" class="form-control" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="drawingId">Чертёж</label>
+                <select id="drawingId" name="drawing_id" class="form-control">
+                    <option value="">Без чертежа</option>
+                    {% for drawing in drawings %}
+                    <option value="{{ drawing.id }}">{{ drawing.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="pageNumber">Номер страницы</label>
+                <input type="number" id="pageNumber" name="page_number" class="form-control" min="1">
+            </div>
+            
+            <div class="form-group">
+                <label for="calculationsText">Текст расчёта</label>
+                <textarea id="calculationsText" name="calculations_text" class="form-control" rows="6" required></textarea>
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Создать</button>
+                <button type="button" class="btn btn-secondary" onclick="closeModal('createCalcModal')">Отмена</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Модальное окно просмотра расчёта -->
+<div id="viewCalcModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Детали расчёта</h3>
+            <button class="modal-close" onclick="closeModal('viewCalcModal')">&times;</button>
+        </div>
+        <div id="calculationDetails"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function loadCalculations() {
+    try {
+        const response = await fetch('/api/drawing-calculations/', {
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') }
+        });
+        
+        if (!response.ok) throw new Error('Ошибка загрузки расчётов');
+        
+        const calculations = await response.json();
+        renderCalculations(calculations);
+    } catch (error) {
+        showMessage(error.message, 'error');
+    }
+}
+
+function renderCalculations(calcs) {
+    const tbody = document.getElementById('calculationsTable');
+    if (calcs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem;">Расчётов нет</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = calcs.map(c => `
+        <tr>
+            <td><strong>${c.element_name}</strong></td>
+            <td>${c.drawing_name || '-'}</td>
+            <td>${c.page_number || '-'}</td>
+            <td>
+                <pre style="background: #f8f9fa; padding: 0.5rem; border-radius: 4px; font-size: 0.85rem; max-height: 100px; overflow-y: auto;">${c.calculations_text.substring(0, 100)}${c.calculations_text.length > 100 ? '...' : ''}</pre>
+            </td>
+            <td>${c.created_at ? c.created_at.substring(0, 10) : '-'}</td>
+            <td class="table-actions">
+                <button class="btn btn-primary btn-sm" onclick="viewCalculation(${c.id})">Просмотр</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteCalculation(${c.id})">Удалить</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function viewCalculation(id) {
+    try {
+        const response = await fetch(`/api/drawing-calculations/${id}`, {
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') }
+        });
+        
+        if (!response.ok) throw new Error('Ошибка загрузки');
+        
+        const calc = await response.json();
+        
+        document.getElementById('calculationDetails').innerHTML = `
+            <div class="form-group">
+                <label>Элемент</label>
+                <p><strong>${calc.element_name}</strong></p>
+            </div>
+            <div class="form-group">
+                <label>Чертёж</label>
+                <p>${calc.drawing_name || 'Не указан'}</p>
+            </div>
+            <div class="form-group">
+                <label>Страница</label>
+                <p>${calc.page_number || 'Не указана'}</p>
+            </div>
+            <div class="form-group">
+                <label>Расчёт</label>
+                <pre style="background: #f8f9fa; padding: 1rem; border-radius: 4px;">${calc.calculations_text}</pre>
+            </div>
+            <div class="form-group">
+                <label>Дата создания</label>
+                <p>${calc.created_at || '-'}</p>
+            </div>
+        `;
+        
+        openModal('viewCalcModal');
+    } catch (error) {
+        showMessage(error.message, 'error');
+    }
+}
+
+async function deleteCalculation(id) {
+    if (!confirm('Вы уверены, что хотите удалить этот расчёт?')) return;
+    
+    try {
+        const response = await fetch(`/api/drawing-calculations/${id}`, {
+            method: 'DELETE',
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') }
+        });
+        
+        if (!response.ok) throw new Error('Ошибка удаления');
+        
+        showMessage('Расчёт удалён', 'success');
+        loadCalculations();
+    } catch (error) {
+        showMessage(error.message, 'error');
+    }
+}
+
+document.getElementById('createCalcForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const data = {
+        element_name: formData.get('element_name'),
+        calculations_text: formData.get('calculations_text'),
+        drawing_id: formData.get('drawing_id') || null,
+        page_number: formData.get('page_number') ? parseInt(formData.get('page_number')) : null
+    };
+    
+    try {
+        const response = await fetch('/api/drawing-calculations/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Session-Key': localStorage.getItem('session_key')
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Ошибка создания');
+        }
+        
+        showMessage('Расчёт создан!', 'success');
+        closeModal('createCalcModal');
+        loadCalculations();
+        e.target.reset();
+    } catch (error) {
+        showMessage(error.message, 'error');
+    }
+});
+
+loadCalculations();
+</script>
+{% endblock %}

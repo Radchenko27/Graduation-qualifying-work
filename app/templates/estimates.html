@@ -1,0 +1,323 @@
+{% extends "base.html" %}
+
+{% block title %}Сметы{% endblock %}
+
+{% block content %}
+<div class="card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h2 class="card-title">Сметы</h2>
+    <div style="display: flex; gap: 0.5rem;">
+        <button class="btn btn-secondary" onclick="openModal('mergeModal')">Объединить</button>
+        <button class="btn btn-primary" onclick="openModal('createEstimateModal')">+ Новая смета</button>
+    </div>
+</div>
+
+<div class="card">
+    <div class="form-group" style="margin-bottom: 1rem;">
+        <select id="projectFilter" class="form-control" style="max-width: 300px;" onchange="loadEstimates()">
+            <option value="">Все проекты</option>
+            {% for project in projects %}
+            <option value="{{ project.id }}">{{ project.name }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Название</th>
+                <th>Проект</th>
+                <th>Сумма</th>
+                <th>Позиций</th>
+                <th>Дата</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody id="estimatesTable">
+            {% for estimate in estimates %}
+            <tr>
+                <td><strong>{{ estimate.name }}</strong></td>
+                <td>{{ estimate.project_name or '-' }}</td>
+                <td><strong>{{ "%.2f"|format(estimate.total_amount or 0) }} ₽</strong></td>
+                <td>{{ estimate.items_count or 0 }}</td>
+                <td>{{ estimate.created_at[:10] if estimate.created_at else '-' }}</td>
+                <td class="table-actions">
+                    <button class="btn btn-primary btn-sm" onclick="viewEstimate({{ estimate.id }})">Просмотр</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteEstimate({{ estimate.id }})">Удалить</button>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="6" style="text-align: center; padding: 2rem;">Смет нет</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Модальное окно создания сметы -->
+<div id="createEstimateModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Создать смету</h3>
+            <button class="modal-close" onclick="closeModal('createEstimateModal')">&times;</button>
+        </div>
+        <form id="createEstimateForm">
+            <div class="form-group">
+                <label for="estimateName">Название</label>
+                <input type="text" id="estimateName" name="name" class="form-control" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="estimateProject">Проект</label>
+                <select id="estimateProject" name="project_id" class="form-control">
+                    <option value="">Без проекта</option>
+                    {% for project in projects %}
+                    <option value="{{ project.id }}">{{ project.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Создать</button>
+                <button type="button" class="btn btn-secondary" onclick="closeModal('createEstimateModal')">Отмена</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Модальное окно объединения смет -->
+<div id="mergeModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Объединить сметы</h3>
+            <button class="modal-close" onclick="closeModal('mergeModal')">&times;</button>
+        </div>
+        <form id="mergeForm">
+            <div class="form-group">
+                <label for="estimate1">Первая смета</label>
+                <select id="estimate1" name="estimate1_id" class="form-control" required></select>
+            </div>
+            
+            <div class="form-group">
+                <label for="estimate2">Вторая смета</label>
+                <select id="estimate2" name="estimate2_id" class="form-control" required></select>
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Объединить</button>
+                <button type="button" class="btn btn-secondary" onclick="closeModal('mergeModal')">Отмена</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Модальное просмотра сметы -->
+<div id="viewEstimateModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Детали сметы</h3>
+            <button class="modal-close" onclick="closeModal('viewEstimateModal')">&times;</button>
+        </div>
+        <div id="estimateDetails"></div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allEstimates = [];
+
+async function loadEstimates() {
+    const projectId = document.getElementById('projectFilter').value;
+    let url = '/api/estimates/';
+    const params = new URLSearchParams();
+    
+    if (projectId) params.append('project_id', projectId);
+    if (params.toString()) url += '?' + params.toString();
+    
+    try {
+        const response = await fetch(url, {
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') }
+        });
+        
+        if (!response.ok) throw new Error('Ошибка загрузки смет');
+        
+        allEstimates = await response.json();
+        renderEstimates(allEstimates);
+        populateMergeSelects();
+    } catch (error) {
+        showMessage(error.message, 'error');
+    }
+}
+
+function renderEstimates(estimates) {
+    const tbody = document.getElementById('estimatesTable');
+    if (estimates.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align: center; padding: 2rem;">Смет нет</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = estimates.map(e => `
+        <tr>
+            <td><strong>${e.name}</strong></td>
+            <td>${e.project_name || '-'}</td>
+            <td><strong>${(e.total_amount || 0).toFixed(2)} ₽</strong></td>
+            <td>${e.items_count || 0}</td>
+            <td>${e.created_at ? e.created_at.substring(0, 10) : '-'}</td>
+            <td class="table-actions">
+                <button class="btn btn-primary btn-sm" onclick="viewEstimate(${e.id})">Просмотр</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteEstimate(${e.id})">Удалить</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function populateMergeSelects() {
+    const options = allEstimates.map(e => `<option value="${e.id}">${e.name}</option>`).join('');
+    document.getElementById('estimate1').innerHTML = '<option value="">Выберите смету</option>' + options;
+    document.getElementById('estimate2').innerHTML = '<option value="">Выберите смету</option>' + options;
+}
+
+async function viewEstimate(id) {
+    try {
+        const response = await fetch(`/api/estimates/${id}`, {
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') }
+        });
+        
+        if (!response.ok) throw new Error('Ошибка загрузки');
+        
+        const estimate = await response.json();
+        
+        const itemsHtml = estimate.items && estimate.items.length > 0 
+            ? estimate.items.map(item => `
+                <tr>
+                    <td>${item.name}</td>
+                    <td>${item.quantity}</td>
+                    <td>${item.unit || 'шт'}</td>
+                    <td>${(item.price || 0).toFixed(2)} ₽</td>
+                    <td>${((item.price || 0) * (item.quantity || 1)).toFixed(2)} ₽</td>
+                </tr>
+            `).join('')
+            : '<tr><td colspan="5" style="text-align: center;">Нет позиций</td></tr>';
+        
+        document.getElementById('estimateDetails').innerHTML = `
+            <div class="form-group">
+                <label>Название</label>
+                <p><strong>${estimate.name}</strong></p>
+            </div>
+            <div class="form-group">
+                <label>Проект</label>
+                <p>${estimate.project_name || 'Не указан'}</p>
+            </div>
+            <div class="form-group">
+                <label>Общая сумма</label>
+                <p><strong>${(estimate.total_amount || 0).toFixed(2)} ₽</strong></p>
+            </div>
+            <h4 style="margin: 1rem 0;">Позиции сметы</h4>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Название</th>
+                        <th>Количество</th>
+                        <th>Ед. изм.</th>
+                        <th>Цена</th>
+                        <th>Сумма</th>
+                    </tr>
+                </thead>
+                <tbody>${itemsHtml}</tbody>
+            </table>
+        `;
+        
+        openModal('viewEstimateModal');
+    } catch (error) {
+        showMessage(error.message, 'error');
+    }
+}
+
+async function deleteEstimate(id) {
+    if (!confirm('Вы уверены, что хотите удалить эту смету?')) return;
+    
+    try {
+        const response = await fetch(`/api/estimates/${id}`, {
+            method: 'DELETE',
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') }
+        });
+        
+        if (!response.ok) throw new Error('Ошибка удаления');
+        
+        showMessage('Смета удалена', 'success');
+        loadEstimates();
+    } catch (error) {
+        showMessage(error.message, 'error');
+    }
+}
+
+document.getElementById('createEstimateForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const data = {
+        name: formData.get('name'),
+        project_id: formData.get('project_id') || null
+    };
+    
+    try {
+        const response = await fetch('/api/estimates/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Session-Key': localStorage.getItem('session_key')
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Ошибка создания');
+        }
+        
+        showMessage('Смета создана!', 'success');
+        closeModal('createEstimateModal');
+        loadEstimates();
+        e.target.reset();
+    } catch (error) {
+        showMessage(error.message, 'error');
+    }
+});
+
+document.getElementById('mergeForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const data = {
+        estimate1_id: parseInt(formData.get('estimate1_id')),
+        estimate2_id: parseInt(formData.get('estimate2_id'))
+    };
+    
+    try {
+        const response = await fetch('/api/estimates/merge', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Session-Key': localStorage.getItem('session_key')
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Ошибка объединения');
+        }
+        
+        showMessage('Сметы объединены!', 'success');
+        closeModal('mergeModal');
+        loadEstimates();
+        e.target.reset();
+    } catch (error) {
+        showMessage(error.message, 'error');
+    }
+});
+
+loadEstimates();
+</script>
+{% endblock %}
