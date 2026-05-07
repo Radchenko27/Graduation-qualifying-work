@@ -12,6 +12,14 @@ class UserBase(BaseModel):
     email: Optional[str] = None
     photo_url: Optional[str] = None
 
+class UserBaseUpdate(BaseModel):
+    """Схема для обновления данных пользователя (все поля необязательные)"""
+    first_name: Optional[str] = None
+    middle_name: Optional[str] = None
+    last_name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+
 class UserCreate(UserBase):
     password: str
 

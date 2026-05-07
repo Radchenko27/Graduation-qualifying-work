@@ -216,9 +216,16 @@ async def profile_page(request: Request):
     
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.get("/users/me", headers={"X-Session-Key": session_key})
-            user = response.json() if response.ok else {}
-        except:
+            response = await client.get("http://127.0.0.1:8000/api/users/me", headers={"X-Session-Key": session_key})
+            print(f"DEBUG profile: API response status = {response.status_code}")
+            if response.status_code == 200:
+                user = response.json()
+                print(f"DEBUG profile: User data = {user}")
+            else:
+                print(f"DEBUG profile: API error = {response.text}")
+                user = {}
+        except Exception as e:
+            print(f"DEBUG profile: Exception = {e}")
             user = {}
     
     return templates.TemplateResponse("profile.html", {
@@ -226,3 +233,128 @@ async def profile_page(request: Request):
         "user": user,
         "current_user": True
     })
+
+
+@router.post("/profile", response_class=HTMLResponse)
+async def profile_update(request: Request):
+    """Обновление данных профиля"""
+    session_key = get_session_key(request)
+    if not session_key:
+        return RedirectResponse(url="/login", status_code=302)
+    
+    # Получаем данные формы
+    form_data = await request.form()
+    user_data = {
+        "first_name": form_data.get("first_name", ""),
+        "middle_name": form_data.get("middle_name", ""),
+        "last_name": form_data.get("last_name", ""),
+        "email": form_data.get("email", ""),
+        "phone": form_data.get("phone", "")
+    }
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.put(
+                "http://127.0.0.1:8000/api/users/me",
+                headers={"X-Session-Key": session_key},
+                json=user_data
+            )
+            if response.status_code == 200:
+                # Обновляем данные пользователя
+                updated_user = response.json()
+                print(f"DEBUG profile update: Success = {updated_user}")
+                # Возвращаем на страницу профиля с обновлёнными данными
+                return RedirectResponse(url="/profile?updated=true", status_code=302)
+            else:
+                print(f"DEBUG profile update: Error = {response.text}")
+                # Возвращаем с ошибкой
+                return RedirectResponse(url="/profile?error=update_failed", status_code=302)
+        except Exception as e:
+            print(f"DEBUG profile update: Exception = {e}")
+            return RedirectResponse(url="/profile?error=exception", status_code=302)
+
+
+@router.get("/projects/{project_id}/share", response_class=HTMLResponse)
+async def project_share_page(request: Request, project_id: int):
+    """Страница управления доступом к проекту"""
+    session_key = get_session_key(request)
+    if not session_key:
+        return RedirectResponse(url="/login", status_code=302)
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            # Получаем информацию о проекте
+            project_response = await client.get(f"/projects/{project_id}", headers={"X-Session-Key": session_key})
+            project = project_response.json() if project_response.ok else {}
+            
+            # Получаем список пользователей с доступом
+            shares_response = await client.get(f"/projects/{project_id}/shares", headers={"X-Session-Key": session_key})
+            shares = shares_response.json() if shares_response.ok else []
+            
+            if not project:
+                return RedirectResponse(url="/projects", status_code=302)
+        except Exception as e:
+            print(f"ERROR: {e}")
+            return RedirectResponse(url="/projects", status_code=302)
+    
+    return templates.TemplateResponse("project_share.html", {
+        "request": request,
+        "project": project,
+        "shares": shares,
+        "current_user": True
+    })
+
+
+@router.post("/projects/{project_id}/share", response_class=HTMLResponse)
+async def project_share_create(request: Request, project_id: int):
+    """Добавить доступ к проекту"""
+    session_key = get_session_key(request)
+    if not session_key:
+        return RedirectResponse(url="/login", status_code=302)
+    
+    # Получаем данные формы
+    form_data = await request.form()
+    share_data = {
+        "project_id": project_id,
+        "shared_with_id": int(form_data.get("shared_with_id")),
+        "access_level": form_data.get("access_level", "read")
+    }
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.post(
+                f"/projects/{project_id}/share",
+                headers={"X-Session-Key": session_key},
+                json=share_data
+            )
+            if response.status_code in [200, 201]:
+                return RedirectResponse(url=f"/projects/{project_id}/share?success=true", status_code=302)
+            else:
+                error_detail = response.json().get("detail", "Ошибка")
+                print(f"Share error: {error_detail}")
+                return RedirectResponse(url=f"/projects/{project_id}/share?error={error_detail}", status_code=302)
+        except Exception as e:
+            print(f"ERROR: {e}")
+            return RedirectResponse(url=f"/projects/{project_id}/share?error=exception", status_code=302)
+
+
+@router.post("/projects/{project_id}/shares/{user_id}/revoke", response_class=HTMLResponse)
+async def project_share_revoke(request: Request, project_id: int, user_id: int):
+    """Отозвать доступ к проекту"""
+    session_key = get_session_key(request)
+    if not session_key:
+        return RedirectResponse(url="/login", status_code=302)
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            response = await client.delete(
+                f"/projects/{project_id}/shares/{user_id}",
+                headers={"X-Session-Key": session_key}
+            )
+            if response.status_code == 204:
+                return RedirectResponse(url=f"/projects/{project_id}/share?success=true", status_code=302)
+            else:
+                return RedirectResponse(url=f"/projects/{project_id}/share?error=revocation_failed", status_code=302)
+        except Exception as e:
+            print(f"ERROR: {e}")
+            return RedirectResponse(url=f"/projects/{project_id}/share?error=exception", status_code=302)

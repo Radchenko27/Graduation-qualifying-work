@@ -167,7 +167,7 @@ def get_current_user_info(
 
 @router.put("/me", response_model=schemas.UserRead)
 def update_current_user(
-    user_update: schemas.UserBase,
+    user_update: schemas.UserBaseUpdate,
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(db.get_db)
 ):
@@ -176,7 +176,27 @@ def update_current_user(
 
     Требует аутентификации
     """
-    user_data = user_update.model_dump()
+    user_data = user_update.model_dump(exclude_unset=True)
+    
+    # Проверяем, что переданы какие-то данные
+    if not user_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Нет данных для обновления"
+        )
+    
+    # Проверяем обязательные поля
+    if 'first_name' in user_data and not user_data['first_name']:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Имя не может быть пустым"
+        )
+    if 'last_name' in user_data and not user_data['last_name']:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Фамилия не может быть пустой"
+        )
+    
     updated_user = crud.Users.update(db, current_user, user_data)
     return updated_user
 
