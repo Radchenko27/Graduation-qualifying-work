@@ -89,7 +89,7 @@ app/
 
 ## 📚 Дополнительная документация
 
-- [QUICKSTART.md](QUICKSTART.md) — Быстрый старт
-- [DEPLOYMENT.md](DEPLOYMENT.md) — Руководство по развертыванию
-- [MINIO_SETUP.md](MINIO_SETUP.md) — Настройка MinIO
+- [QUICKSTART.md](docs/md/Quickstart.md) — Быстрый старт
+- [DEPLOYMENT.md](docs/md/DEPLOYMENT.md) — Руководство по развертыванию
+- [MINIO_SETUP.md](docs/md/MINIO_SETUP.md) — Настройка MinIO
 

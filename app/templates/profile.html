@@ -20,8 +20,23 @@
         </div>
         
         <div class="form-group">
-            <label>ФИО</label>
-            <p>{{ user.full_name or '-' }}</p>
+            <label>Имя</label>
+            <p>{{ user.first_name or '-' }}</p>
+        </div>
+        
+        <div class="form-group">
+            <label>Отчество</label>
+            <p>{{ user.middle_name or '-' }}</p>
+        </div>
+        
+        <div class="form-group">
+            <label>Фамилия</label>
+            <p>{{ user.last_name or '-' }}</p>
+        </div>
+        
+        <div class="form-group">
+            <label>Телефон</label>
+            <p>{{ user.phone or '-' }}</p>
         </div>
     </div>
     

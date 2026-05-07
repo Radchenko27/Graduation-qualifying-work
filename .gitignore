@@ -44,3 +44,6 @@ test_db.sqlite3
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Moved documentation
+docs/md/!(*.md)

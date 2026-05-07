@@ -8,6 +8,10 @@ import sys
 from pathlib import Path
 import os
 
+# Загружаем .env файл
+from dotenv import load_dotenv
+load_dotenv()
+
 # Добавляем путь к приложению
 sys.path.append(str(Path(__file__).resolve().parents[0]))
 
@@ -77,7 +81,9 @@ def run_migrations_online() -> None:
 
     with connectable.connect() as connection:
         context.configure(
-            connection=connection, target_metadata=target_metadata
+            connection=connection,
+            target_metadata=target_metadata,
+            render_as_batch=True,  # Enable batch mode for SQLite
         )
 
         with context.begin_transaction():

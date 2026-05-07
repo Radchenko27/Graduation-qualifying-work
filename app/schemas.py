@@ -52,7 +52,7 @@ class ProjectFilter(BaseModel):
 
 class DocumentBase(BaseModel):
     project_id: int
-    doc_type: str
+    doc_type: Optional[str] = None
     category: Optional[str] = None  # Категория документа (классификация)
     created_at: Optional[date] = None
     name: str
@@ -65,6 +65,7 @@ class DocumentCreate(DocumentBase):
 
 class DocumentRead(DocumentBase):
     id: int
+    project_name: Optional[str] = None
     class Config:
         from_attributes = True
 
@@ -96,16 +97,22 @@ class DrawingRead(DrawingBase):
 class MaterialBase(BaseModel):
     type: str
     name: str
-    price: float
-    mark: str
+    price: float = 0.0
+    mark: str = ""
 
 class MaterialCreate(MaterialBase):
     pass
 
-class MaterialRead(MaterialBase):
+class MaterialResponse(MaterialBase):
     id: int
     class Config:
         from_attributes = True
+
+
+class MaterialBatchImport(BaseModel):
+    """Схема для пакетного импорта материалов"""
+    input_dir: str
+    project_id: Optional[int] = None
 
 
 class MaterialDrawingBase(BaseModel):

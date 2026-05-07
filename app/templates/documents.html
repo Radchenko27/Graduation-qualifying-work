@@ -45,7 +45,7 @@
                 <td><span class="badge badge-primary">{{ doc.category or 'Без категории' }}</span></td>
                 <td>{{ doc.created_at[:10] if doc.created_at else '-' }}</td>
                 <td class="table-actions">
-                    <a href="/documents/{{ doc.id }}/download" class="btn btn-primary btn-sm">Скачать</a>
+                    <button class="btn btn-primary btn-sm" onclick="downloadDocument({{ doc.id }}, '{{ doc.name }}')">Скачать</button>
                     <button class="btn btn-danger btn-sm" data-delete="/api/documents/{{ doc.id }}" data-redirect="/documents">Удалить</button>
                 </td>
             </tr>
@@ -108,6 +108,52 @@
 
 {% block scripts %}
 <script>
+// Загрузка проектов пользователя
+async function loadProjects() {
+    try {
+        const response = await fetch('/api/projects/', {
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') }
+        });
+        
+        if (!response.ok) throw new Error('Ошибка загрузки проектов');
+        
+        const projects = await response.json();
+        populateProjectSelects(projects);
+    } catch (error) {
+        console.error('Ошибка:', error);
+    }
+}
+
+function populateProjectSelects(projects) {
+    const selects = ['projectFilter', 'docProject'];
+    
+    selects.forEach(selectId => {
+        const select = document.getElementById(selectId);
+        if (!select) return;
+        
+        // Сохраняем текущее значение
+        const currentValue = select.value;
+        
+        // Очищаем опции
+        select.innerHTML = selectId === 'projectFilter' 
+            ? '<option value="">Все проекты</option>'
+            : '<option value="">Выберите проект</option>';
+        
+        // Добавляем проекты
+        projects.forEach(project => {
+            const option = document.createElement('option');
+            option.value = project.id;
+            option.textContent = project.name;
+            select.appendChild(option);
+        });
+        
+        // Восстанавливаем значение если возможно
+        if (currentValue) {
+            select.value = currentValue;
+        }
+    });
+}
+
 async function loadDocuments() {
     const projectId = document.getElementById('projectFilter').value;
     const category = document.getElementById('categoryFilter').value;
@@ -147,7 +193,7 @@ function renderDocuments(docs) {
             <td><span class="badge badge-primary">${d.category || 'Без категории'}</span></td>
             <td>${d.created_at ? d.created_at.substring(0, 10) : '-'}</td>
             <td class="table-actions">
-                <a href="/documents/${d.id}/download" class="btn btn-primary btn-sm">Скачать</a>
+                <button class="btn btn-primary btn-sm" onclick="downloadDocument(${d.id}, '${d.name}')">Скачать</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteDocument(${d.id})">Удалить</button>
             </td>
         </tr>
@@ -167,6 +213,39 @@ async function deleteDocument(id) {
         
         showMessage('Документ удалён', 'success');
         loadDocuments();
+    } catch (error) {
+        showMessage(error.message, 'error');
+    }
+}
+
+async function downloadDocument(id, fileName) {
+    try {
+        const sessionKey = localStorage.getItem('session_key');
+        const response = await fetch(`/api/documents/${id}/download`, {
+            headers: { 'X-Session-Key': sessionKey }
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Ошибка скачивания');
+        }
+        
+        // Создаём Blob из ответа
+        const blob = await response.blob();
+        
+        // Создаём ссылку для скачивания
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        
+        // Очищаем
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        showMessage('Файл скачан!', 'success');
     } catch (error) {
         showMessage(error.message, 'error');
     }
@@ -203,6 +282,8 @@ document.getElementById('uploadDocForm').addEventListener('submit', async (e) =>
     }
 });
 
+// Загружаем проекты при загрузке страницы
+loadProjects();
 loadDocuments();
 </script>
 {% endblock %}

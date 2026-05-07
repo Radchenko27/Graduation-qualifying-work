@@ -1,9 +1,9 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import select, and_, or_
 from typing import Type, TypeVar, Generic, List, Optional
+from datetime import datetime, date
 
 from . import models
-from datetime import datetime
 
 ModelType = TypeVar("ModelType", bound=models.Base)
 
@@ -128,9 +128,23 @@ class ProjectCRUD(CRUDBase[models.Project]):
         return query.offset(skip).limit(limit).all()
 
     def create_with_owner(self, db: Session, obj_in_data: dict, owner_id: int) -> models.Project:
-        """Создать проект с указанием владельца"""
+        """Создать проект с указанием владельца и добавлением владельца как участника"""
         obj_in_data["owner_id"] = owner_id
-        return self.create(db, obj_in_data)
+        
+        # Создаём проект
+        project = self.create(db, obj_in_data)
+        
+        # Добавляем владельца как участника с правами admin
+        project_user = models.ProjectUser(
+            user_id=owner_id,
+            project_id=project.id,
+            access_rights="admin",
+            created_at=date.today()
+        )
+        db.add(project_user)
+        db.commit()
+        
+        return project
 
 
 class DocumentCRUD(CRUDBase[models.Document]):
@@ -140,13 +154,13 @@ class DocumentCRUD(CRUDBase[models.Document]):
             models.Document.project_id == project_id,
             models.Document.category == category
         ).offset(skip).limit(limit).all()
-
+        
     def get_by_project(self, db: Session, project_id: int, skip: int = 0, limit: int = 100) -> List[models.Document]:
         """Получить все документы проекта"""
         return db.query(models.Document).filter(
             models.Document.project_id == project_id
         ).offset(skip).limit(limit).all()
-
+        
 
 class EstimateCRUD(CRUDBase[models.Estimate]):
     def create_with_defaults(self, db: Session, obj_in_data: dict) -> models.Estimate:
@@ -222,8 +236,38 @@ class EstimateCRUD(CRUDBase[models.Estimate]):
         return new_estimate
 
 
+class ProjectUserCRUD(CRUDBase[models.ProjectUser]):
+    def check_access(self, db: Session, user_id: int, project_id: int) -> bool:
+        """Проверить доступ пользователя к проекту"""
+        return db.query(models.ProjectUser).filter(
+            models.ProjectUser.user_id == user_id,
+            models.ProjectUser.project_id == project_id
+        ).first() is not None
+    
+    def get_user_projects(self, db: Session, user_id: int, skip: int = 0, limit: int = 100) -> List[models.Project]:
+        """Получить все проекты пользователя (включая общие)"""
+        # Проекты, где пользователь является участником
+        user_projects = db.query(models.Project).join(
+            models.ProjectUser, models.Project.id == models.ProjectUser.project_id
+        ).filter(
+            models.ProjectUser.user_id == user_id
+        ).offset(skip).limit(limit).all()
+        
+        # Проекты, доступные через sharing
+        shared_projects = db.query(models.Project).join(
+            models.ProjectShare, models.Project.id == models.ProjectShare.project_id
+        ).filter(
+            models.ProjectShare.shared_with_id == user_id
+        ).offset(skip).limit(limit).all()
+        
+        # Объединяем и убираем дубликаты
+        all_projects = {p.id: p for p in user_projects + shared_projects}
+        return list(all_projects.values())
+
+
 # Заменяем стандартные классы на расширенные
 Users = UserCRUD(models.User)
 Projects = ProjectCRUD(models.Project)
 Documents = DocumentCRUD(models.Document)
+ProjectUsers = ProjectUserCRUD(models.ProjectUser)
 Estimates = EstimateCRUD(models.Estimate)
