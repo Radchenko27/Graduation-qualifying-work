@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+
+{% block title %}Документы{% endblock %}
+
+{% block content %}
+<div class="card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h2 class="card-title">Документы</h2>
+    <button class="btn btn-primary" onclick="openModal('uploadDocModal')">+ Загрузить документ</button>
+</div>
+
+<div class="card">
+    <div class="form-group" style="display: flex; gap: 1rem; margin-bottom: 1rem;">
+        <select id="projectFilter" class="form-control" style="max-width: 250px;">
+            <option value="">Все проекты</option>
+            {% for project in projects %}
+            <option value="{{ project.id }}">{{ project.name }}</option>
+            {% endfor %}
+        </select>
+        <select id="categoryFilter" class="form-control" style="max-width: 200px;">
+            <option value="">Все категории</option>
+            <option value="project_documentation">Проектная документация</option>
+            <option value="technical_specs">Технические спецификации</option>
+            <option value="drawings">Чертежи</option>
+            <option value="estimates">Сметы</option>
+            <option value="correspondence">Переписка</option>
+        </select>
+        <button class="btn btn-secondary" onclick="loadDocuments()">Фильтр</button>
+    </div>
+    
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Название</th>
+                <th>Проект</th>
+                <th>Категория</th>
+                <th>Дата</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody id="documentsTable">
+            {% for doc in documents %}
+            <tr>
+                <td><strong>{{ doc.name }}</strong></td>
+                <td>{{ doc.project_name or '-' }}</td>
+                <td><span class="badge badge-primary">{{ doc.category or 'Без категории' }}</span></td>
+                <td>{{ doc.created_at[:10] if doc.created_at else '-' }}</td>
+                <td class="table-actions">
+                    <button class="btn btn-primary btn-sm" onclick="downloadDocument({{ doc.id }}, '{{ doc.name }}')">Скачать</button>
+                    <button class="btn btn-danger btn-sm" data-delete="/api/documents/{{ doc.id }}" data-redirect="/documents">Удалить</button>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="5" style="text-align: center; padding: 2rem;">Документов нет</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Модальное окно загрузки документа -->
+<div id="uploadDocModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>Загрузить документ</h3>
+            <button class="modal-close" onclick="closeModal('uploadDocModal')">&times;</button>
+        </div>
+        <form id="uploadDocForm" enctype="multipart/form-data">
+            <div class="form-group">
+                <label for="docFile">Файл</label>
+                <input type="file" id="docFile" name="file" class="form-control" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="docName">Название</label>
+                <input type="text" id="docName" name="name" class="form-control" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="docProject">Проект</label>
+                <select id="docProject" name="project_id" class="form-control">
+                    <option value="">Без проекта</option>
+                    {% for project in projects %}
+                    <option value="{{ project.id }}">{{ project.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="docCategory">Категория</label>
+                <select id="docCategory" name="category" class="form-control">
+                    <option value="project_documentation">Проектная документация</option>
+                    <option value="technical_specs">Технические спецификации</option>
+                    <option value="drawings">Чертежи</option>
+                    <option value="estimates">Сметы</option>
+                    <option value="correspondence">Переписка</option>
+                </select>
+            </div>
+            
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">Загрузить</button>
+                <button type="button" class="btn btn-secondary" onclick="closeModal('uploadDocModal')">Отмена</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Загрузка проектов пользователя
+async function loadProjects() {
+    try {
+        const response = await fetch('/api/projects/', {
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') }
+        });
+        
+        if (!response.ok) throw new Error('Ошибка загрузки проектов');
+        
+        const projects = await response.json();
+        populateProjectSelects(projects);
+    } catch (error) {
+        console.error('Ошибка:', error);
+    }
+}
+
+function populateProjectSelects(projects) {
+    const selects = ['projectFilter', 'docProject'];
+    
+    selects.forEach(selectId => {
+        const select = document.getElementById(selectId);
+        if (!select) return;
+        
+        // Сохраняем текущее значение
+        const currentValue = select.value;
+        
+        // Очищаем опции
+        select.innerHTML = selectId === 'projectFilter' 
+            ? '<option value="">Все проекты</option>'
+            : '<option value="">Выберите проект</option>';
+        
+        // Добавляем проекты
+        projects.forEach(project => {
+            const option = document.createElement('option');
+            option.value = project.id;
+            option.textContent = project.name;
+            select.appendChild(option);
+        });
+        
+        // Восстанавливаем значение если возможно
+        if (currentValue) {
+            select.value = currentValue;
+        }
+    });
+}
+
+async function loadDocuments() {
+    const projectId = document.getElementById('projectFilter').value;
+    const category = document.getElementById('categoryFilter').value;
+    let url = '/api/documents/';
+    const params = new URLSearchParams();
+    
+    if (projectId) params.append('project_id', projectId);
+    if (category) params.append('category', category);
+    
+    if (params.toString()) url += '?' + params.toString();
+    
+    try {
+        const response = await fetch(url, {
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') }
+        });
+        
+        if (!response.ok) throw new Error('Ошибка загрузки документов');
+        
+        const documents = await response.json();
+        renderDocuments(documents);
+    } catch (error) {
+        showMessage(error.message, 'error');
+    }
+}
+
+function renderDocuments(docs) {
+    const tbody = document.getElementById('documentsTable');
+    if (docs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; padding: 2rem;">Документов нет</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = docs.map(d => `
+        <tr>
+            <td><strong>${d.name}</strong></td>
+            <td>${d.project_name || '-'}</td>
+            <td><span class="badge badge-primary">${d.category || 'Без категории'}</span></td>
+            <td>${d.created_at ? d.created_at.substring(0, 10) : '-'}</td>
+            <td class="table-actions">
+                <button class="btn btn-primary btn-sm" onclick="downloadDocument(${d.id}, '${d.name}')">Скачать</button>
+                <button class="btn btn-danger btn-sm" onclick="deleteDocument(${d.id})">Удалить</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async function deleteDocument(id) {
+    if (!confirm('Вы уверены, что хотите удалить этот документ?')) return;
+    
+    try {
+        const response = await fetch(`/api/documents/${id}`, {
+            method: 'DELETE',
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') }
+        });
+        
+        if (!response.ok) throw new Error('Ошибка удаления');
+        
+        showMessage('Документ удалён', 'success');
+        loadDocuments();
+    } catch (error) {
+        showMessage(error.message, 'error');
+    }
+}
+
+async function downloadDocument(id, fileName) {
+    try {
+        const sessionKey = localStorage.getItem('session_key');
+        const response = await fetch(`/api/documents/${id}/download`, {
+            headers: { 'X-Session-Key': sessionKey }
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Ошибка скачивания');
+        }
+        
+        // Создаём Blob из ответа
+        const blob = await response.blob();
+        
+        // Создаём ссылку для скачивания
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        
+        // Очищаем
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        showMessage('Файл скачан!', 'success');
+    } catch (error) {
+        showMessage(error.message, 'error');
+    }
+}
+
+document.getElementById('uploadDocForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const data = new FormData();
+    data.append('file', formData.get('file'));
+    data.append('name', formData.get('name'));
+    if (formData.get('project_id')) data.append('project_id', formData.get('project_id'));
+    data.append('category', formData.get('category'));
+    
+    try {
+        const response = await fetch('/api/documents/', {
+            method: 'POST',
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') },
+            body: data
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Ошибка загрузки');
+        }
+        
+        showMessage('Документ загружен!', 'success');
+        closeModal('uploadDocModal');
+        loadDocuments();
+        e.target.reset();
+    } catch (error) {
+        showMessage(error.message, 'error');
+    }
+});
+
+// Загружаем проекты при загрузке страницы
+loadProjects();
+loadDocuments();
+</script>
+{% endblock %}

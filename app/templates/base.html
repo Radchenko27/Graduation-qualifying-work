@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Автоматизированная система обработки технической строительной документации {% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="/" class="nav-brand">ТехДок</a>
+            <ul class="nav-menu">
+                <li><a href="/projects">Проекты</a></li>
+                <li><a href="/documents">Документы</a></li>
+                <li><a href="/drawing-calculations">Расчёты</a></li>
+                <li><a href="/estimates">Сметы</a></li>
+                <li><a href="/users">Пользователи</a></li>
+                {% if current_user %}
+                    <li><a href="/profile">Профиль</a></li>
+                    <li><a href="/logout" class="btn-logout">Выйти</a></li>
+                {% else %}
+                    <li><a href="/login">Войти</a></li>
+                    <li><a href="/register" class="btn-register">Регистрация</a></li>
+                {% endif %}
+            </ul>
+        </div>
+    </nav>
+
+    <main class="container">
+        {% if messages %}
+            <div class="messages">
+                {% for message in messages %}
+                    <div class="message {{ message.type }}">{{ message.text }}</div>
+                {% endfor %}
+            </div>
+        {% endif %}
+        
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <p>&copy; 2026 Автоматизированная система обработки технической строительной документации</p>
+    </footer>
+
+    <script src="/static/js/main.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>

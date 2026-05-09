@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}Главная{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div style="text-align: center; padding: 2rem;">
+        <h1 style="margin-bottom: 1rem;">Система управления техническими документами</h1>
+        <p style="color: #666; margin-bottom: 2rem; font-size: 1.1rem;">
+            Управление проектами, документацией, расчётами и сметами в одном месте
+        </p>
+        
+        {% if current_user %}
+        <div class="grid">
+            <div class="card" style="text-align: left;">
+                <h3 style="margin-bottom: 1rem;">📁 Проекты</h3>
+                <p style="color: #666; margin-bottom: 1rem;">Управляйте своими проектами</p>
+                <a href="/projects" class="btn btn-primary">Перейти к проектам</a>
+            </div>
+            
+            <div class="card" style="text-align: left;">
+                <h3 style="margin-bottom: 1rem;">📄 Документы</h3>
+                <p style="color: #666; margin-bottom: 1rem;">Храните и классифицируйте документацию</p>
+                <a href="/documents" class="btn btn-primary">Управлять документами</a>
+            </div>
+            
+            <div class="card" style="text-align: left;">
+                <h3 style="margin-bottom: 1rem;">📐 Расчёты</h3>
+                <p style="color: #666; margin-bottom: 1rem;">Выполняйте расчёты элементов чертежей</p>
+                <a href="/drawing-calculations" class="btn btn-primary">Сделать расчёт</a>
+            </div>
+            
+            <div class="card" style="text-align: left;">
+                <h3 style="margin-bottom: 1rem;">💰 Сметы</h3>
+                <p style="color: #666; margin-bottom: 1rem;">Составляйте и объединяйте сметы</p>
+                <a href="/estimates" class="btn btn-primary">Управлять сметами</a>
+            </div>
+        </div>
+        {% else %}
+        <div style="display: flex; gap: 1rem; justify-content: center;">
+            <a href="/login" class="btn btn-primary">Войти</a>
+            <a href="/register" class="btn btn-success">Зарегистрироваться</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card" style="margin-top: 2rem;">
+    <h2 style="margin-bottom: 1rem;">Возможности системы</h2>
+    <div class="grid">
+        <div>
+            <h4 style="margin-bottom: 0.5rem;">✅ Управление пользователями</h4>
+            <p style="color: #666;">Регистрация, аутентификация, профили</p>
+        </div>
+        <div>
+            <h4 style="margin-bottom: 0.5rem;">✅ Проекты</h4>
+            <p style="color: #666;">Создание, редактирование, поиск и фильтрация</p>
+        </div>
+        <div>
+            <h4 style="margin-bottom: 0.5rem;">✅ Документация</h4>
+            <p style="color: #666;">Загрузка, классификация по категориям</p>
+        </div>
+        <div>
+            <h4 style="margin-bottom: 0.5rem;">✅ Расчёты</h4>
+            <p style="color: #666;">Расчёт элементов чертежей с указанием страниц</p>
+        </div>
+        <div>
+            <h4 style="margin-bottom: 0.5rem;">✅ Сметы</h4>
+            <p style="color: #666;">Составление смет и их объединение</p>
+        </div>
+        <div>
+            <h4 style="margin-bottom: 0.5rem;">✅ RESTful API</h4>
+            <p style="color: #666;">Полноценный API для интеграций</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
