@@ -207,8 +207,9 @@ def get_project_shares(
             detail="Project not found"
         )
     
-    # Проверка прав доступа
-    if not crud.ProjectUsers.check_access(db, current_user.id, project_id):
+    # Проверка прав доступа (владелец или участник)
+    has_access = (project.owner_id == current_user.id) or crud.ProjectUsers.check_access(db, current_user.id, project_id)
+    if not has_access:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Нет доступа к проекту"

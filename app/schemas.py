@@ -185,7 +185,7 @@ class ProjectShareCreate(ProjectShareBase):
 class ProjectShareRead(ProjectShareBase):
     id: int
     owner_id: int
-    shared_at: date
+    shared_at: Optional[date] = None
 
     class Config:
         from_attributes = True

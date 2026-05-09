@@ -9,7 +9,7 @@
         <p style="color: #666; margin-top: 0.5rem;">{{ project.description }}</p>
     </div>
     <div style="display: flex; gap: 0.5rem;">
-        <a href="/projects/{{ project.id }}/share" class="btn btn-success">Поделиться</a>
+        <button class="btn btn-success" onclick="openShareModal()">Поделиться</button>
         <a href="/projects" class="btn btn-secondary">Назад</a>
     </div>
 </div>
@@ -17,22 +17,209 @@
 <div class="grid">
     <div class="card">
         <h3 style="margin-bottom: 1rem;">Документы</h3>
-        <a href="/projects/{{ project.id }}/documents" class="btn btn-primary" style="width: 100%;">Управление документами</a>
+        <a href="/projects/{{ project_id }}/documents" class="btn btn-primary" style="width: 100%;">Управление документами</a>
     </div>
     
     <div class="card">
         <h3 style="margin-bottom: 1rem;">Чертежи и расчёты</h3>
-        <a href="/projects/{{ project.id }}/calculations" class="btn btn-primary" style="width: 100%;">Расчёты элементов</a>
+        <a href="/projects/{{ project_id }}/calculations" class="btn btn-primary" style="width: 100%;">Расчёты элементов</a>
     </div>
     
     <div class="card">
         <h3 style="margin-bottom: 1rem;">Сметы</h3>
-        <a href="/projects/{{ project.id }}/estimates" class="btn btn-primary" style="width: 100%;">Управление сметами</a>
+        <a href="/projects/{{ project_id }}/estimates" class="btn btn-primary" style="width: 100%;">Управление сметами</a>
     </div>
     
     <div class="card">
         <h3 style="margin-bottom: 1rem;">Участники</h3>
-        <a href="/projects/{{ project.id }}/users" class="btn btn-primary" style="width: 100%;">Управление доступом</a>
+        <a href="/projects/{{ project_id }}/users" class="btn btn-primary" style="width: 100%;">Управление доступом</a>
     </div>
 </div>
+
+<!-- Модальное окно выбора пользователей для шаринга -->
+<div id="shareModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 700px;">
+        <div class="modal-header">
+            <h3>Поделиться проектом: {{ project.name }}</h3>
+            <button class="modal-close" onclick="closeShareModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <!-- Поиск пользователей -->
+            <div class="form-group" style="margin-bottom: 1rem;">
+                <label>Поиск пользователя</label>
+                <input type="text" id="userSearch" placeholder="Введите имя или username..." 
+                       style="width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px;">
+            </div>
+            
+            <!-- Список пользователей -->
+            <div id="userList" style="max-height: 300px; overflow-y: auto; margin-bottom: 1rem;">
+                <p style="text-align: center; color: #666;">Загрузка...</p>
+            </div>
+            
+            <!-- Форма добавления выбранного пользователя -->
+            <div id="shareFormContainer" style="display: none; padding: 1rem; background: #f9f9f9; border-radius: 4px;">
+                <h4>Добавить доступ</h4>
+                <p><strong>Пользователь:</strong> <span id="selectedUserName"></span></p>
+                <input type="hidden" id="selectedUserId">
+                
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label>Уровень доступа</label>
+                    <select id="accessLevel" style="width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px;">
+                        <option value="read">👁️ Чтение (только просмотр)</option>
+                        <option value="write">✏️ Редактирование (изменение документов)</option>
+                        <option value="admin">👑 Администратор (полный доступ)</option>
+                    </select>
+                </div>
+                
+                <div style="display: flex; gap: 0.5rem;">
+                    <button id="shareBtn" class="btn btn-success">Поделиться</button>
+                    <button class="btn btn-secondary" onclick="cancelShare()">Отмена</button>
+                </div>
+            </div>
+            
+            <!-- Сообщение об успехе -->
+            <div id="successMessage" style="display: none; padding: 1rem; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; margin-bottom: 1rem;">
+                ✅ <strong>Успешно!</strong> Проект поделён с пользователем.
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let currentProjectId = {{ project_id }};
+
+// Открыть модальное окно
+function openShareModal() {
+    document.getElementById('shareModal').style.display = 'block';
+    document.getElementById('userList').innerHTML = '<p style="text-align: center; color: #666;">Загрузка...</p>';
+    document.getElementById('shareFormContainer').style.display = 'none';
+    document.getElementById('successMessage').style.display = 'none';
+    loadUsers();
+}
+
+// Закрыть модальное окно
+function closeShareModal() {
+    document.getElementById('shareModal').style.display = 'none';
+}
+
+// Отменить выбор пользователя
+function cancelShare() {
+    document.getElementById('shareFormContainer').style.display = 'none';
+    document.getElementById('selectedUserId').value = '';
+}
+
+// Загрузить список пользователей
+async function loadUsers(search = '') {
+    const userList = document.getElementById('userList');
+    
+    try {
+        const url = search 
+            ? `/api/users/search?q=${encodeURIComponent(search)}`
+            : '/api/users/';
+        
+        const response = await fetch(url, {
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') }
+        });
+        
+        if (!response.ok) throw new Error('Ошибка загрузки пользователей');
+        
+        const users = await response.json();
+        
+        if (users.length === 0) {
+            userList.innerHTML = '<p style="text-align: center; color: #666;">Пользователи не найдены</p>';
+            return;
+        }
+        
+        userList.innerHTML = users.map(u => `
+            <div style="padding: 0.75rem; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; align-items: center;" 
+                 onclick="selectUser(${u.id}, '${escapeHtml(u.first_name || '')} ${escapeHtml(u.last_name || '')}')">
+                <div>
+                    <strong>${escapeHtml(u.first_name || '')} ${escapeHtml(u.last_name || '')}</strong><br>
+                    <small style="color: #666;">@${escapeHtml(u.username)}</small>
+                </div>
+                <span style="color: #007bff;">➜</span>
+            </div>
+        `).join('');
+    } catch (error) {
+        userList.innerHTML = `<p style="text-align: center; color: red;">${error.message}</p>`;
+    }
+}
+
+// Выбрать пользователя
+function selectUser(userId, userName) {
+    document.getElementById('selectedUserId').value = userId;
+    document.getElementById('selectedUserName').textContent = userName;
+    document.getElementById('shareFormContainer').style.display = 'block';
+    document.getElementById('successMessage').style.display = 'none';
+}
+
+// Поделиться с пользователем
+async function shareProject() {
+    const userId = document.getElementById('selectedUserId').value;
+    const accessLevel = document.getElementById('accessLevel').value;
+    
+    if (!userId) {
+        alert('Выберите пользователя!');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/projects/${currentProjectId}/share`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Session-Key': localStorage.getItem('session_key')
+            },
+            body: JSON.stringify({
+                project_id: currentProjectId,
+                shared_with_id: parseInt(userId),
+                access_level: accessLevel
+            })
+        });
+        
+        if (response.ok) {
+            document.getElementById('successMessage').style.display = 'block';
+            document.getElementById('shareFormContainer').style.display = 'none';
+            // Сбросить форму
+            setTimeout(() => {
+                closeShareModal();
+            }, 2000);
+        } else {
+            const error = await response.json();
+            alert('Ошибка: ' + (error.detail || 'Не удалось поделиться'));
+        }
+    } catch (error) {
+        alert('Ошибка: ' + error.message);
+    }
+}
+
+// Поиск пользователей (debounce)
+let searchTimeout;
+document.getElementById('userSearch').addEventListener('input', (e) => {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        loadUsers(e.target.value);
+    }, 300);
+});
+
+// Обработчик кнопки "Поделиться"
+document.getElementById('shareBtn').addEventListener('click', shareProject);
+
+// Закрытие модального окна по клику вне его
+window.onclick = function(event) {
+    const modal = document.getElementById('shareModal');
+    if (event.target === modal) {
+        closeShareModal();
+    }
+}
+
+// Экранирование HTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+</script>
 {% endblock %}

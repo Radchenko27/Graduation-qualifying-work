@@ -74,9 +74,9 @@ class UserCRUD(CRUDBase[models.User]):
                 models.User.first_name.ilike(search_term),
                 models.User.last_name.ilike(search_term),
                 or_(
-                    models.User.first_name + ' ' + models.User.last_name,
-                    models.User.last_name + ' ' + models.User.first_name
-                ).ilike(search_term)
+                    (models.User.first_name + ' ' + models.User.last_name).ilike(search_term),
+                    (models.User.last_name + ' ' + models.User.first_name).ilike(search_term)
+                )
             )
         ).offset(skip).limit(limit).all()
 

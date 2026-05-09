@@ -83,14 +83,17 @@ async def project_detail_page(request: Request, project_id: int):
     
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.get(f"/projects/{project_id}", headers={"X-Session-Key": session_key})
+            response = await client.get(f"/api/projects/{project_id}", headers={"X-Session-Key": session_key})
             project = response.json() if response.ok else {}
-        except:
+            print(f"DEBUG project detail: project = {project}")
+        except Exception as e:
+            print(f"ERROR: {e}")
             project = {}
     
     return templates.TemplateResponse("project_detail.html", {
         "request": request,
         "project": project,
+        "project_id": project_id,
         "current_user": True
     })
 
@@ -284,14 +287,21 @@ async def project_share_page(request: Request, project_id: int):
     async with httpx.AsyncClient() as client:
         try:
             # Получаем информацию о проекте
-            project_response = await client.get(f"/projects/{project_id}", headers={"X-Session-Key": session_key})
+            project_response = await client.get(
+                "http://127.0.0.1:8000/api/projects/" + str(project_id),
+                headers={"X-Session-Key": session_key}
+            )
             project = project_response.json() if project_response.ok else {}
             
             # Получаем список пользователей с доступом
-            shares_response = await client.get(f"/projects/{project_id}/shares", headers={"X-Session-Key": session_key})
+            shares_response = await client.get(
+                "http://127.0.0.1:8000/api/projects/" + str(project_id) + "/shares",
+                headers={"X-Session-Key": session_key}
+            )
             shares = shares_response.json() if shares_response.ok else []
             
-            if not project:
+            if not project or not project.get('id'):
+                print(f"ERROR: Project not found or empty: {project}")
                 return RedirectResponse(url="/projects", status_code=302)
         except Exception as e:
             print(f"ERROR: {e}")
@@ -300,6 +310,7 @@ async def project_share_page(request: Request, project_id: int):
     return templates.TemplateResponse("project_share.html", {
         "request": request,
         "project": project,
+        "project_id": project_id,
         "shares": shares,
         "current_user": True
     })
@@ -323,7 +334,7 @@ async def project_share_create(request: Request, project_id: int):
     async with httpx.AsyncClient() as client:
         try:
             response = await client.post(
-                f"/projects/{project_id}/share",
+                "http://127.0.0.1:8000/api/projects/" + str(project_id) + "/share",
                 headers={"X-Session-Key": session_key},
                 json=share_data
             )
@@ -348,7 +359,7 @@ async def project_share_revoke(request: Request, project_id: int, user_id: int):
     async with httpx.AsyncClient() as client:
         try:
             response = await client.delete(
-                f"/projects/{project_id}/shares/{user_id}",
+                "http://127.0.0.1:8000/api/projects/" + str(project_id) + "/shares/" + str(user_id),
                 headers={"X-Session-Key": session_key}
             )
             if response.status_code == 204:
