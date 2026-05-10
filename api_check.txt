@@ -1,0 +1,63 @@
+﻿python : Form data requires "python-multipart" to be installed. 
+строка:1 знак:67
++ ... ying-work"; python -c "from app.routers.api.documents import create_d ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Form data requi... be installed. :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+You can install "python-multipart" with: 
+
+pip install python-multipart
+
+Traceback (most recent call last):
+[OK] MinIO bucket 'documents' ��� ����������
+  File "<string>", line 1, in <module>
+    from app.routers.api.documents import create_document; print('API OK')
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work\app\routers\api\__init__.py", line 1, in <module>
+    from . import users, projects, documents, drawing_calculations, estimates, materials
+  File "C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work\app\routers\api\documents.py", line 20, in <module>
+    @router.post("/", response_model=schemas.DocumentRead, status_code=status.HTTP_201_CREATED)
+     ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dimar\AppData\Roaming\Python\Python314\site-packages\fastapi\routing.py", line 1450, in decorator
+    self.add_api_route(
+    ~~~~~~~~~~~~~~~~~~^
+        path,
+        ^^^^^
+    ...<23 lines>...
+        generate_unique_id_function=generate_unique_id_function,
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\dimar\AppData\Roaming\Python\Python314\site-packages\fastapi\routing.py", line 1386, in add_api_route
+    route = route_class(
+        self.prefix + path,
+    ...<27 lines>...
+        ),
+    )
+  File "C:\Users\dimar\AppData\Roaming\Python\Python314\site-packages\fastapi\routing.py", line 949, in __init__
+    self.dependant = get_dependant(
+                     ~~~~~~~~~~~~~^
+        path=self.path_format, call=self.endpoint, scope="function"
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "C:\Users\dimar\AppData\Roaming\Python\Python314\site-packages\fastapi\dependencies\utils.py", line 311, in get_
+dependant
+    param_details = analyze_param(
+        param_name=param_name,
+    ...<2 lines>...
+        is_path_param=is_path_param,
+    )
+  File "C:\Users\dimar\AppData\Roaming\Python\Python314\site-packages\fastapi\dependencies\utils.py", line 535, in anal
+yze_param
+    ensure_multipart_is_installed()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\dimar\AppData\Roaming\Python\Python314\site-packages\fastapi\dependencies\utils.py", line 120, in ensu
+re_multipart_is_installed
+    raise RuntimeError(multipart_not_installed_error) from None
+RuntimeError: Form data requires "python-multipart" to be installed. 
+You can install "python-multipart" with: 
+
+pip install python-multipart
+

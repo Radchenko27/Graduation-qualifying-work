@@ -1,5 +1,5 @@
 from datetime import date, datetime
-from typing import Optional
+from typing import Optional, List
 from pydantic import BaseModel
 
 
@@ -58,10 +58,20 @@ class ProjectFilter(BaseModel):
     search: Optional[str] = None  # Поиск по названию
 
 
+# Категории документов (фиксированный список)
+DOCUMENT_CATEGORIES = [
+    ("project_documentation", "Проектная документация"),
+    ("working_drawings", "Рабочие чертежи"),
+    ("specifications", "Спецификации"),
+    ("calculations", "Расчёты"),
+    ("permits", "Разрешительная документация"),
+    ("other", "Другое")
+]
+
 class DocumentBase(BaseModel):
     project_id: int
     doc_type: Optional[str] = None
-    category: Optional[str] = None  # Категория документа (классификация)
+    category: str  # Категория документа (обязательная, фиксированная)
     created_at: Optional[date] = None
     name: str
     file_path: Optional[str] = None
@@ -78,13 +88,33 @@ class DocumentRead(DocumentBase):
         from_attributes = True
 
 
-class DocumentCategoryUpdate(BaseModel):
-    """Схема для обновления категории документа"""
-    category: str
+class DocumentPageBase(BaseModel):
+    page_number: int
+    category: str  # drawing, specification, scheme, title, other
+    confidence: float = 0.0
+    content_type: Optional[str] = None
+
+class DocumentPageCreate(DocumentPageBase):
+    pass
+
+class DocumentPageRead(DocumentPageBase):
+    id: int
+    document_id: int
+
+    class Config:
+        from_attributes = True
+
+
+class DocumentWithPagesRead(DocumentRead):
+    """Документ с его страницами"""
+    pages: List[DocumentPageRead] = []
+
+    class Config:
+        from_attributes = True
 
 
 class DrawingBase(BaseModel):
-    document_id: int
+    document_id: int  # Чертеж привязан к документу
     project_id: int
     number: str
     name: str

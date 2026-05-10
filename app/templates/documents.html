@@ -19,10 +19,11 @@
         <select id="categoryFilter" class="form-control" style="max-width: 200px;">
             <option value="">Все категории</option>
             <option value="project_documentation">Проектная документация</option>
-            <option value="technical_specs">Технические спецификации</option>
-            <option value="drawings">Чертежи</option>
-            <option value="estimates">Сметы</option>
-            <option value="correspondence">Переписка</option>
+            <option value="working_drawings">Рабочие чертежи</option>
+            <option value="specifications">Спецификации</option>
+            <option value="calculations">Расчёты</option>
+            <option value="permits">Разрешительная</option>
+            <option value="other">Другое</option>
         </select>
         <button class="btn btn-secondary" onclick="loadDocuments()">Фильтр</button>
     </div>
@@ -33,7 +34,8 @@
                 <th>Название</th>
                 <th>Проект</th>
                 <th>Категория</th>
-                <th>Дата</th>
+                <th>Страниц</th>
+                <!-- <th>Дата</th> -->
                 <th>Действия</th>
             </tr>
         </thead>
@@ -42,20 +44,36 @@
             <tr>
                 <td><strong>{{ doc.name }}</strong></td>
                 <td>{{ doc.project_name or '-' }}</td>
-                <td><span class="badge badge-primary">{{ doc.category or 'Без категории' }}</span></td>
-                <td>{{ doc.created_at[:10] if doc.created_at else '-' }}</td>
-                <td class="table-actions">
-                    <button class="btn btn-primary btn-sm" onclick="downloadDocument({{ doc.id }}, '{{ doc.name }}')">Скачать</button>
-                    <button class="btn btn-danger btn-sm" data-delete="/api/documents/{{ doc.id }}" data-redirect="/documents">Удалить</button>
-                </td>
+                <td><span class="badge badge-primary">{{ getCategoryName(doc.category) }}</span></td>
+                <td>{{ doc.page_count or 0 }}</td>
+                <!-- <td>{{ doc.created_at[:10] if doc.created_at else '-' }}</td> -->
+            <td class="table-actions">
+                <button class="btn btn-primary btn-sm" onclick="downloadDocument({{ doc.id }}, '{{ doc.name }}')">Скачать</button>
+                <button class="btn btn-info btn-sm" onclick="openDocumentView({{ doc.id }})">📂 Открыть</button>
+                <button class="btn btn-warning btn-sm" onclick="viewDocumentPages({{ doc.id }})">📄 Страницы</button>
+                <button class="btn btn-danger btn-sm" data-delete="/api/documents/{{ doc.id }}" data-redirect="/documents">Удалить</button>
+            </td>
             </tr>
             {% else %}
             <tr>
-                <td colspan="5" style="text-align: center; padding: 2rem;">Документов нет</td>
+                <td colspan="6" style="text-align: center; padding: 2rem;">Документов нет</td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
+</div>
+
+<!-- Модальное окно просмотра страниц документа -->
+<div id="pagesModal" class="modal">
+    <div class="modal-content" style="max-width: 900px;">
+        <div class="modal-header">
+            <h3>Классификация страниц</h3>
+            <button class="modal-close" onclick="closePagesModal()">&times;</button>
+        </div>
+        <div id="pagesContent">
+            <div style="text-align: center; padding: 2rem;">Загрузка...</div>
+        </div>
+    </div>
 </div>
 
 <!-- Модальное окно загрузки документа -->
@@ -86,19 +104,18 @@
                 </select>
             </div>
             
-            <div class="form-group">
-                <label for="docCategory">Категория</label>
-                <select id="docCategory" name="category" class="form-control">
-                    <option value="project_documentation">Проектная документация</option>
-                    <option value="technical_specs">Технические спецификации</option>
-                    <option value="drawings">Чертежи</option>
-                    <option value="estimates">Сметы</option>
-                    <option value="correspondence">Переписка</option>
-                </select>
+            <div class="form-group" style="background: #e7f3ff; padding: 0.75rem; border-radius: 4px; border-left: 3px solid #007bff;">
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                    <input type="checkbox" id="autoClassify" name="auto_classify" value="true" checked>
+                    <strong>🔍 Автоматическая классификация страниц (PDF)</strong>
+                </label>
+                <small style="color: #666; display: block; margin-top: 0.25rem;">
+                    Анализирует страницы PDF и распределяет их по категориям
+                </small>
             </div>
             
             <div class="form-actions">
-                <button type="submit" class="btn btn-primary">Загрузить</button>
+                <button type="submit" class="btn btn-primary">📤 Загрузить</button>
                 <button type="button" class="btn btn-secondary" onclick="closeModal('uploadDocModal')">Отмена</button>
             </div>
         </form>
@@ -179,6 +196,18 @@ async function loadDocuments() {
     }
 }
 
+function getCategoryName(category) {
+    const categories = {
+        'project_documentation': 'Проектная документация',
+        'working_drawings': 'Рабочие чертежи',
+        'specifications': 'Спецификации',
+        'calculations': 'Расчёты',
+        'permits': 'Разрешительная',
+        'other': 'Другое'
+    };
+    return categories[category] || category || 'Без категории';
+}
+
 function renderDocuments(docs) {
     const tbody = document.getElementById('documentsTable');
     if (docs.length === 0) {
@@ -190,10 +219,12 @@ function renderDocuments(docs) {
         <tr>
             <td><strong>${d.name}</strong></td>
             <td>${d.project_name || '-'}</td>
-            <td><span class="badge badge-primary">${d.category || 'Без категории'}</span></td>
-            <td>${d.created_at ? d.created_at.substring(0, 10) : '-'}</td>
+            <td><span class="badge badge-primary">${getCategoryName(d.category)}</span></td>
+            <td>${d.page_count || 0}</td>
             <td class="table-actions">
                 <button class="btn btn-primary btn-sm" onclick="downloadDocument(${d.id}, '${d.name}')">Скачать</button>
+                <button class="btn btn-info btn-sm" onclick="openDocumentView(${d.id})">📂 Открыть</button>
+                <button class="btn btn-warning btn-sm" onclick="viewDocumentPages(${d.id})">📄 Страницы</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteDocument(${d.id})">Удалить</button>
             </td>
         </tr>
@@ -251,15 +282,144 @@ async function downloadDocument(id, fileName) {
     }
 }
 
+async function viewDocumentPages(documentId) {
+    try {
+        const response = await fetch(`/api/documents/${documentId}/pages`, {
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки страниц');
+        }
+        
+        const data = await response.json();
+        renderPagesModal(data);
+        openModal('pagesModal');
+    } catch (error) {
+        showMessage(error.message, 'error');
+    }
+}
+
+function renderPagesModal(data) {
+    const content = document.getElementById('pagesContent');
+    
+    if (!data.pages || data.pages.length === 0) {
+        content.innerHTML = `
+            <div style="text-align: center; padding: 2rem; color: #666;">
+                Страницы не классифицированы
+            </div>
+        `;
+        return;
+    }
+    
+    // Подсчёт категорий
+    const categoryCounts = {};
+    data.pages.forEach(page => {
+        const cat = page.category || 'other';
+        categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
+    });
+    
+    // Сводка
+    let summaryHtml = '<div style="display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap;">';
+    const categoryColors = {
+        'title': '#6c757d',
+        'drawing': '#007bff',
+        'scheme': '#28a745',
+        'specification': '#ffc107',
+        'other': '#17a2b8'
+    };
+    
+    Object.entries(categoryCounts).forEach(([cat, count]) => {
+        const color = categoryColors[cat] || '#6c757d';
+        summaryHtml += `
+            <span class="badge" style="background: ${color}; color: white;">
+                ${getCategoryNameRu(cat)}: ${count}
+            </span>
+        `;
+    });
+    summaryHtml += '</div>';
+    
+    // Таблица страниц
+    let tableHtml = `
+        ${summaryHtml}
+        <table class="table" style="font-size: 0.9rem;">
+            <thead>
+                <tr>
+                    <th>Стр.</th>
+                    <th>Категория</th>
+                    <th>Тип</th>
+                    <th>Уверенность</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    data.pages.forEach(page => {
+        const catColor = categoryColors[page.category] || '#6c757d';
+        const confidencePercent = Math.round((page.confidence || 0) * 100);
+        
+        tableHtml += `
+            <tr>
+                <td><strong>${page.page_number}</strong></td>
+                <td><span class="badge" style="background: ${catColor}; color: white;">${getCategoryNameRu(page.category)}</span></td>
+                <td>${page.content_type || '-'}</td>
+                <td>
+                    <div style="display: flex; align-items: center; gap: 0.5rem;">
+                        <div style="flex: 1; height: 6px; background: #e9ecef; border-radius: 3px;">
+                            <div style="width: ${confidencePercent}%; height: 100%; background: ${catColor}; border-radius: 3px;"></div>
+                        </div>
+                        <span style="font-size: 0.8rem;">${confidencePercent}%</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+    
+    tableHtml += '</tbody></table>';
+    content.innerHTML = tableHtml;
+}
+
+function closePagesModal() {
+    closeModal('pagesModal');
+}
+
+function getCategoryNameRu(category) {
+    const names = {
+        'title': 'Титульник',
+        'drawing': 'Чертеж',
+        'scheme': 'Схема',
+        'specification': 'Спецификация',
+        'other': 'Другое',
+        'project_documentation': 'Проектная документация',
+        'working_drawings': 'Рабочие чертежи',
+        'specifications': 'Спецификации',
+        'calculations': 'Расчёты',
+        'permits': 'Разрешительная'
+    };
+    return names[category] || category;
+}
+
+// Функция открытия страницы просмотра документа
+function openDocumentView(documentId) {
+    window.location.href = `/documents/${documentId}`;
+}
+
 document.getElementById('uploadDocForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    if (submitBtn.disabled) return;
+    submitBtn.disabled = true;
+    submitBtn.textContent = '⏳ Загрузка...';
+    
     const formData = new FormData(e.target);
+    
     const data = new FormData();
     data.append('file', formData.get('file'));
     data.append('name', formData.get('name'));
     if (formData.get('project_id')) data.append('project_id', formData.get('project_id'));
-    data.append('category', formData.get('category'));
+    data.append('category', 'other');
+    if (formData.get('auto_classify')) data.append('auto_classify', 'true');
     
     try {
         const response = await fetch('/api/documents/', {
@@ -273,12 +433,19 @@ document.getElementById('uploadDocForm').addEventListener('submit', async (e) =>
             throw new Error(error.detail || 'Ошибка загрузки');
         }
         
-        showMessage('Документ загружен!', 'success');
+        const document = await response.json();
+        showMessage('Документ загружен! Перехожу к просмотру...', 'success');
         closeModal('uploadDocModal');
-        loadDocuments();
+        
         e.target.reset();
+        
+        // Переходим на страницу документа
+        window.location.href = `/documents/${document.id}`;
+        
     } catch (error) {
         showMessage(error.message, 'error');
+        submitBtn.disabled = false;
+        submitBtn.textContent = '📤 Загрузить';
     }
 });
 

@@ -47,7 +47,7 @@ class Document(Base):
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"))
     doc_type = Column(String(100))
-    category = Column(String(100), nullable=True)  # Категория документа (классификация)
+    category = Column(String(100), nullable=False)  # Категория документа (обязательная)
     created_at = Column(Date)
     name = Column(String(255))
     file_path = Column(String(1024), nullable=True)
@@ -56,6 +56,21 @@ class Document(Base):
 
     project = relationship("Project", back_populates="documents")
     drawings = relationship("Drawing", back_populates="document", cascade="all, delete-orphan")
+    pages = relationship("DocumentPage", back_populates="document", cascade="all, delete-orphan")
+
+
+class DocumentPage(Base):
+    """Модель для хранения страниц документа с классификацией"""
+    __tablename__ = "document_pages"
+    id = Column(Integer, primary_key=True, index=True)
+    document_id = Column(Integer, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    page_number = Column(Integer, nullable=False)  # Номер страницы (с 1)
+    category = Column(String(50), nullable=False)  # Категория: drawing, specification, scheme, title, other
+    confidence = Column(Float, default=0.0)  # Уверенность классификации (0.0 - 1.0)
+    content_type = Column(String(50), nullable=True)  # Тип содержимого: text, image, table
+    page_metadata = Column(Text, nullable=True)  # Дополнительная информация (JSON)
+    
+    document = relationship("Document", back_populates="pages")
 
 
 class Drawing(Base):

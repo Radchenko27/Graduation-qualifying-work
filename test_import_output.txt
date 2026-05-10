@@ -1,0 +1,4 @@
+﻿[OK] MinIO bucket 'documents' ��� ����������
+Import OK
+Documents.remove: <bound method DocumentCRUD.remove of <app.crud.DocumentCRUD object at 0x00000231C3736F90>>
+Projects.remove: <bound method ProjectCRUD.remove of <app.crud.ProjectCRUD object at 0x00000231C3737380>>

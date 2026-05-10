@@ -4,12 +4,15 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date
 import hashlib
+import io
+import json
 import mimetypes
 from urllib.parse import quote
 
 from ... import crud, schemas, db, models
 from ...dependencies import get_current_user
 from ...services.minio_client import minio_client
+from ...services.document_classifier_v2 import classifier
 
 router = APIRouter()
 
@@ -19,7 +22,8 @@ def create_document(
     project_id: int = Form(...),
     name: str = Form(...),
     doc_type: Optional[str] = Form(None),
-    category: Optional[str] = Form(None),
+    category: str = Form('other'),
+    auto_classify: bool = Form(False),
     file: Optional[UploadFile] = File(None),
     current_user: models.User = Depends(get_current_user),
     db: Session = Depends(db.get_db)
@@ -27,7 +31,7 @@ def create_document(
     """
     Создать новый документ с загрузкой файла
 
-    Требует аутентификации
+    Классификация страниц выполняется автоматически если auto_classify=true и файл PDF
     """
     # Проверка существования проекта
     project = crud.Projects.get(db, project_id)
@@ -48,6 +52,7 @@ def create_document(
     file_path = None
     file_hash = None
     page_count = None
+    file_content = None
     
     if file:
         # Читаем содержимое файла
@@ -70,10 +75,11 @@ def create_document(
         if file.filename.lower().endswith('.pdf'):
             try:
                 import fitz  # PyMuPDF
-                doc = fitz.open(io.BytesIO(file_content))
+                doc = fitz.open(stream=io.BytesIO(file_content), filetype="pdf")
                 page_count = len(doc)
                 doc.close()
-            except:
+            except Exception as e:
+                print(f"ERROR: Cannot read PDF: {e}")
                 pass
     
     # Создаём документ
@@ -88,7 +94,36 @@ def create_document(
         "created_at": date.today()
     }
     
-    return crud.Documents.create(db, document_data)
+    document = crud.Documents.create(db, document_data)
+    
+    # Автоматическая классификация если запрошена и есть PDF
+    if auto_classify and file_content and file.filename and file.filename.lower().endswith('.pdf'):
+        try:
+            classifications = classifier.classify_pdf_pages(file_content)
+            for page_data in classifications:
+                page_info = {
+                    'document_id': document.id,
+                    'page_number': page_data.page_number,
+                    'category': page_data.category,
+                    'confidence': page_data.confidence,
+                    'content_type': page_data.content_type,
+                    'page_metadata': json.dumps(page_data.metadata)
+                }
+                crud.DocumentPages.create(db, page_info)
+            
+            # Обновляем page_count
+            if classifications:
+                document.page_count = len(classifications)
+                db.add(document)
+                db.commit()
+                db.refresh(document)
+            
+            print(f"[OK] Auto-classified {len(classifications)} pages for document {document.id}")
+        except Exception as e:
+            print(f"[WARN] Auto-classification failed: {e}")
+            # Не прерываем создание документа если классификация не удалась
+    
+    return document
 
 
 @router.get("/", response_model=List[schemas.DocumentRead])
@@ -288,4 +323,214 @@ def download_document(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Ошибка при загрузке файла из MinIO: {str(e)}"
+        )
+
+
+@router.get("/{document_id}/stats")
+def get_document_stats(
+    document_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(db.get_db)
+):
+    """
+    Получить статистику классификации страниц документа
+    
+    Возвращает:
+    - total_pages: общее количество страниц
+    - categories: {category: count} — распределение по категориям
+    - avg_confidence: средняя уверенность классификации
+    """
+    document = crud.Documents.get(db, document_id)
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    # Проверка доступа к проекту
+    if not crud.ProjectUsers.check_access(db, current_user.id, document.project_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Нет доступа к проекту"
+        )
+    
+    pages = db.query(models.DocumentPage).filter(
+        models.DocumentPage.document_id == document_id
+    ).all()
+    
+    if not pages:
+        return {
+            "document_id": document_id,
+            "document_name": document.name,
+            "total_pages": 0,
+            "classified_pages": 0,
+            "categories": {},
+            "avg_confidence": 0
+        }
+        
+    # Статистика по категориям
+    categories = {}
+    total_confidence = 0
+    
+    for page in pages:
+        cat = page.category or 'other'
+        categories[cat] = categories.get(cat, 0) + 1
+        total_confidence += page.confidence or 0
+    
+    return {
+        "document_id": document_id,
+        "document_name": document.name,
+        "total_pages": document.page_count or len(pages),
+        "classified_pages": len(pages),
+        "categories": categories,
+        "avg_confidence": round(total_confidence / len(pages), 2)
+    }
+
+
+@router.get("/{document_id}/pages")
+def get_document_pages(
+    document_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(db.get_db)
+):
+    """
+    Получить классификацию страниц документа
+
+    Требует аутентификации
+    """
+    document = crud.Documents.get(db, document_id)
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+
+    # Проверка доступа к проекту
+    if not crud.ProjectUsers.check_access(db, current_user.id, document.project_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Нет доступа к проекту"
+        )
+    
+    # Получаем страницы документа
+    pages = db.query(models.DocumentPage).filter(
+        models.DocumentPage.document_id == document_id
+    ).order_by(models.DocumentPage.page_number).all()
+    
+    # Форматируем ответ
+    pages_data = [
+        {
+            "id": page.id,
+            "document_id": page.document_id,
+            "page_number": page.page_number,
+            "category": page.category,
+            "confidence": page.confidence,
+            "content_type": page.content_type,
+            "page_metadata": page.page_metadata
+        }
+        for page in pages
+    ]
+    
+    return {
+        "document_id": document_id,
+        "document_name": document.name,
+        "total_pages": len(pages_data),
+        "pages": pages_data
+    }
+
+
+@router.post("/{document_id}/classify")
+def classify_document_pages(
+    document_id: int,
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(db.get_db)
+):
+    """
+    Переклассифицировать страницы документа вручную
+
+    Требует аутентификации
+    """
+    document = crud.Documents.get(db, document_id)
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+    
+    # Проверка доступа к проекту
+    if not crud.ProjectUsers.check_access(db, current_user.id, document.project_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Нет доступа к проекту"
+        )
+    
+    # Проверяем есть ли файл
+    if not document.file_path:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="У документа нет файла"
+        )
+    
+    # Скачиваем файл из MinIO
+    if document.file_path.startswith("minio://"):
+        object_key = document.file_path.replace("minio://", "")
+    else:
+        object_key = document.file_path
+    
+    try:
+        file_content = minio_client.download_file(object_key)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка загрузки файла: {str(e)}"
+        )
+    
+    # Проверяем что это PDF
+    if not document.file_path.lower().endswith('.pdf'):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Только PDF файлы поддерживают классификацию"
+        )
+    
+    # Удаляем старые классификации
+    db.query(models.DocumentPage).filter(
+        models.DocumentPage.document_id == document_id
+    ).delete()
+    db.commit()
+    
+    # Выполняем классификацию
+    try:
+        classifications = classifier.classify_pdf_pages(file_content)
+        
+        # Сохраняем новые классификации
+        for page_data in classifications:
+            page_info = {
+                'document_id': document_id,
+                'page_number': page_data.page_number,
+                'category': page_data.category,
+                'confidence': page_data.confidence,
+                'content_type': page_data.content_type,
+                'page_metadata': json.dumps(page_data.metadata)
+            }
+            crud.DocumentPages.create(db, page_info)
+        
+        # Обновляем page_count документа
+        if classifications:
+            document.page_count = len(classifications)
+            db.add(document)
+            db.commit()
+            db.refresh(document)
+        
+        return {
+            "document_id": document_id,
+            "total_pages": len(classifications),
+            "message": f"Успешно классифицировано {len(classifications)} страниц"
+        }
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка классификации: {str(e)}"
         )

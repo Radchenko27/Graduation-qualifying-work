@@ -1,0 +1,343 @@
+{% extends "base.html" %}
+
+{% block title %}Документ: {{ document.name }}{% endblock %}
+
+{% block content %}
+<div class="card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <div>
+        <a href="/documents" style="text-decoration: none; color: #007bff; margin-right: 1rem;">← Назад к документам</a>
+        <h2 class="card-title">{{ document.name }}</h2>
+        <small style="color: #666;">
+            Проект: {{ document.project_name or '-' }} | 
+            Категория: {{ getCategoryName(document.category) }} | 
+            Страниц: {{ document.page_count or 0 }}
+        </small>
+    </div>
+    <div>
+        <button class="btn btn-primary" onclick="downloadDocument()">📥 Скачать</button>
+        <button class="btn btn-warning" onclick="reclassifyDocument()">🔍 Переклассифицировать</button>
+    </div>
+</div>
+
+<!-- Статус классификации -->
+<div id="classificationStatus" class="card" style="margin-bottom: 1rem; display: none;">
+    <div class="card-body">
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <div id="loadingSpinner" style="display: none;">
+                <div class="spinner-border text-primary" role="status"></div>
+            </div>
+            <div id="statusMessage"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Статистика классификации -->
+<div id="classificationStats" class="card" style="margin-bottom: 1rem; display: none;">
+    <div class="card-body">
+        <h4 style="margin: 0 0 0.75rem 0;">📊 Результаты классификации</h4>
+        <div id="statsContent"></div>
+    </div>
+</div>
+
+<!-- Папки с категориями страниц -->
+<div class="card">
+    <div class="card-header">
+        <h3>📂 Страницы документа</h3>
+        <small style="color: #666;">
+            Нажмите "🔍 Переклассифицировать" для анализа страниц
+        </small>
+    </div>
+    <div class="card-body">
+        <div id="pagesFolders">
+            <div style="text-align: center; padding: 3rem; color: #666;">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">📄</div>
+                <p>Загрузка страниц...</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const DOCUMENT_ID = {{ document.id }};
+
+// Категории и их цвета
+const CATEGORIES = {
+    'title': {
+        name: '📄 Титульник',
+        color: '#6c757d',
+        icon: '📄',
+        description: 'Титульные листы, обложки'
+    },
+    'drawing': {
+        name: '📐 Чертеж',
+        color: '#007bff',
+        icon: '📐',
+        description: 'Рабочие чертежи, планы, разрезы'
+    },
+    'scheme': {
+        name: '🔷 Схема',
+        color: '#28a745',
+        icon: '🔷',
+        description: 'Структурные, функциональные схемы'
+    },
+    'specification': {
+        name: '📊 Спецификация',
+        color: '#ffc107',
+        icon: '📊',
+        description: 'Ведомости, таблицы материалов'
+    },
+    'other': {
+        name: '📁 Другое',
+        color: '#17a2b8',
+        icon: '📁',
+        description: 'Всё остальное'
+    }
+};
+
+// Загрузка страниц документа
+async function loadPages() {
+    try {
+        // Загружаем статистику
+        loadStats();
+        
+        const response = await fetch(`/api/documents/${DOCUMENT_ID}/pages`, {
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки страниц');
+        }
+        
+        const data = await response.json();
+        renderPagesFolders(data);
+    } catch (error) {
+        showMessage(error.message, 'error');
+        document.getElementById('pagesFolders').innerHTML = `
+            <div style="text-align: center; padding: 3rem; color: #dc3545;">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">❌</div>
+                <p>${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+// Загрузка статистики классификации
+async function loadStats() {
+    try {
+        const response = await fetch(`/api/documents/${DOCUMENT_ID}/stats`, {
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') }
+        });
+        
+        if (!response.ok) return;
+        
+        const data = await response.json();
+        
+        if (data.classified_pages === 0) {
+            document.getElementById('classificationStats').style.display = 'none';
+            return;
+        }
+        
+        const statsDiv = document.getElementById('statsContent');
+        
+        // Формируем HTML с бейджами
+        let badgesHtml = '<div style="display: flex; gap: 0.75rem; flex-wrap: wrap; margin-bottom: 0.75rem;">';
+        
+        Object.entries(data.categories).forEach(([cat, count]) => {
+            const catInfo = CATEGORIES[cat] || CATEGORIES['other'];
+            badgesHtml += `
+                <span class="badge" style="background: ${catInfo.color}; color: white; font-size: 0.9rem; padding: 0.4rem 0.8rem;">
+                    ${catInfo.icon} ${catInfo.name}: ${count} стр.
+                </span>
+            `;
+        });
+        
+        badgesHtml += '</div>';
+        
+        statsDiv.innerHTML = `
+            ${badgesHtml}
+            <div style="display: flex; gap: 1.5rem; color: #666; font-size: 0.9rem;">
+                <span>📄 Всего страниц: <strong>${data.total_pages}</strong></span>
+                <span>✅ Классифицировано: <strong>${data.classified_pages}</strong></span>
+                <span>🎯 Средняя уверенность: <strong>${Math.round(data.avg_confidence * 100)}%</strong></span>
+            </div>
+        `;
+        
+        document.getElementById('classificationStats').style.display = 'block';
+        
+    } catch (e) {
+        console.error('Stats load error:', e);
+    }
+}
+
+// Отрисовка папок с категориями
+function renderPagesFolders(data) {
+    const container = document.getElementById('pagesFolders');
+    
+    if (!data.pages || data.pages.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 3rem; color: #666;">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">📭</div>
+                <p>Страницы не классифицированы</p>
+                <p style="font-size: 0.9rem;">
+                    Нажмите кнопку <strong>"🔍 Реклассифицировать"</strong> для анализа документа
+                </p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Группировка страниц по категориям
+    const pagesByCategory = {};
+    Object.keys(CATEGORIES).forEach(cat => {
+        pagesByCategory[cat] = [];
+    });
+    
+    data.pages.forEach(page => {
+        const cat = page.category || 'other';
+        if (pagesByCategory[cat]) {
+            pagesByCategory[cat].push(page);
+        } else {
+            pagesByCategory['other'].push(page);
+        }
+    });
+    
+    // Отрисовка папок
+    let html = '<div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem;">';
+    
+    Object.entries(CATEGORIES).forEach(([catKey, catInfo]) => {
+        const pages = pagesByCategory[catKey];
+        const count = pages.length;
+        
+        if (count === 0) return; // Пропускаем пустые папки
+        
+        html += `
+            <div class="folder" style="
+                border: 2px solid ${catInfo.color};
+                border-radius: 8px;
+                padding: 1rem;
+                background: linear-gradient(135deg, ${catInfo.color}15 0%, ${catInfo.color}05 100%);
+            ">
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
+                    <span style="font-size: 1.5rem;">${catInfo.icon}</span>
+                    <h4 style="margin: 0; color: ${catInfo.color};">${catInfo.name}</h4>
+                    <span class="badge" style="background: ${catInfo.color}; color: white; margin-left: auto;">
+                        ${count} стр.
+                    </span>
+                </div>
+                <p style="margin: 0 0 0.75rem 0; font-size: 0.85rem; color: #666;">
+                    ${catInfo.description}
+                </p>
+                <div style="font-size: 0.8rem; color: #495057;">
+                    <strong>Страницы:</strong> ${pages.map(p => p.page_number).join(', ')}
+                </div>
+                ${pages.length > 1 ? `
+                    <div style="margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid ${catInfo.color}30;">
+                        <strong>Уверенность:</strong>
+                        <div style="display: flex; align-items: center; gap: 0.5rem; margin-top: 0.25rem;">
+                            <div style="flex: 1; height: 8px; background: rgba(0,0,0,0.1); border-radius: 4px;">
+                                ${(() => {
+                                    const avgConfidence = pages.reduce((sum, p) => sum + (p.confidence || 0), 0) / pages.length;
+                                    return `<div style="width: ${avgConfidence * 100}%; height: 100%; background: ${catInfo.color}; border-radius: 4px;"></div>`;
+                                })()}
+                            </div>
+                            <span>${Math.round(pages.reduce((sum, p) => sum + (p.confidence || 0), 0) / pages.length * 100)}%</span>
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    
+    if (Object.values(pagesByCategory).every(p => p.length === 0)) {
+        html = `
+            <div style="text-align: center; padding: 3rem; color: #666;">
+                <div style="font-size: 3rem; margin-bottom: 1rem;">📭</div>
+                <p>Страницы не классифицированы</p>
+            </div>
+        `;
+    }
+    
+    container.innerHTML = html;
+}
+
+// Скачать документ
+async function downloadDocument() {
+    try {
+        const sessionKey = localStorage.getItem('session_key');
+        const response = await fetch(`/api/documents/${DOCUMENT_ID}/download`, {
+            headers: { 'X-Session-Key': sessionKey }
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Ошибка скачивания');
+        }
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = '{{ document.name }}';
+        document.body.appendChild(a);
+        a.click();
+        
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        showMessage('Файл скачан!', 'success');
+    } catch (error) {
+        showMessage(error.message, 'error');
+    }
+}
+
+// Переклассификация документа
+async function reclassifyDocument() {
+    if (!confirm('Переклассифицировать все страницы этого документа?')) return;
+    
+    const statusDiv = document.getElementById('classificationStatus');
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    const statusMessage = document.getElementById('statusMessage');
+    
+    statusDiv.style.display = 'block';
+    loadingSpinner.style.display = 'inline-block';
+    statusMessage.innerHTML = '<span>⏳ Анализ страниц...</span>';
+    
+    try {
+        const formData = new FormData();
+        formData.append('auto_classify', 'true');
+        
+        const response = await fetch(`/api/documents/${DOCUMENT_ID}/classify`, {
+            method: 'POST',
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') },
+            body: formData
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Ошибка классификации');
+        }
+        
+        statusMessage.innerHTML = '<span style="color: #28a745;">✅ Классификация завершена!</span>';
+        showMessage('Страницы переклассифицированы!', 'success');
+        
+        setTimeout(() => {
+            statusDiv.style.display = 'none';
+            loadStats();  // Обновляем статистику
+            loadPages();  // Обновляем страницы
+        }, 1500);
+        
+    } catch (error) {
+        loadingSpinner.style.display = 'none';
+        statusMessage.innerHTML = `<span style="color: #dc3545;">❌ ${error.message}</span>`;
+        showMessage(error.message, 'error');
+    }
+}
+
+// Загрузка страниц при загрузке страницы
+loadPages();
+</script>
+{% endblock %}

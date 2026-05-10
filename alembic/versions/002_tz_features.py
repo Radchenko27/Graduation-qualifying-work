@@ -74,8 +74,31 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_estimate_items_id'), 'estimate_items', ['id'], unique=False)
 
+    # 6. Create document_pages table (классификация страниц документов)
+    op.create_table(
+        'document_pages',
+        sa.Column('id', sa.Integer(), nullable=False),
+        sa.Column('document_id', sa.Integer(), nullable=False),
+        sa.Column('page_number', sa.Integer(), nullable=False),
+        sa.Column('category', sa.String(length=50), nullable=False),
+        sa.Column('confidence', sa.Float(), nullable=True),
+        sa.Column('content_type', sa.String(length=50), nullable=True),
+        sa.Column('page_metadata', sa.Text(), nullable=True),
+        sa.ForeignKeyConstraint(['document_id'], ['documents.id'], ondelete='CASCADE'),
+        sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_document_pages_id'), 'document_pages', ['id'], unique=False)
+    op.create_index('ix_document_pages_document_id', 'document_pages', ['document_id'])
+    op.create_index('ix_document_pages_page_number', 'document_pages', ['page_number'])
+
 
 def downgrade() -> None:
+    # Drop document_pages
+    op.drop_index('ix_document_pages_page_number', table_name='document_pages')
+    op.drop_index('ix_document_pages_document_id', table_name='document_pages')
+    op.drop_index(op.f('ix_document_pages_id'), table_name='document_pages')
+    op.drop_table('document_pages')
+    
     # Drop estimate_items
     op.drop_index(op.f('ix_estimate_items_id'), table_name='estimate_items')
     op.drop_table('estimate_items')

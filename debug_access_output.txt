@@ -1,0 +1,20 @@
+﻿python : C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work\debug_access.py:10: LegacyAPIWarning: The Query.ge
+t() method is considered legacy as of the 1.x series of SQLAlchemy and becomes a legacy construct in 2.0. The method is
+ now available as Session.get() (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+строка:1 знак:67
++ ... _IU5\Graduation-qualifying-work"; python debug_access.py 2>&1 | Out-F ...
++                                       ~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (C:\Users\dimar\...lche.me/e/b8d9):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  project = db.query(models.Project).get(6)
+C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work\debug_access.py:22: LegacyAPIWarning: The Query.get() metho
+d is considered legacy as of the 1.x series of SQLAlchemy and becomes a legacy construct in 2.0. The method is now avai
+lable as Session.get() (deprecated since: 2.0) (Background on SQLAlchemy 2.0 at: https://sqlalche.me/e/b8d9)
+  doc = db.query(models.Document).get(15)
+Project id=6: owner_id=2
+ProjectUsers for project 6:
+  user_id=2, access_rights=admin
+
+Document id=15: project_id=6, name=������ ���� �������� 1
+Doc '������ ���� �������� 1': page_count=None, classified_pages=99

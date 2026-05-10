@@ -134,6 +134,47 @@ async def download_document(request: Request, document_id: int):
     return RedirectResponse(url=f"/api/documents/{document_id}/download")
 
 
+@router.get("/documents/{document_id}", response_class=HTMLResponse)
+async def document_detail_page(request: Request, document_id: int):
+    """Страница просмотра документа с классификацией страниц"""
+    session_key = get_session_key(request)
+    if not session_key:
+        return RedirectResponse(url="/login", status_code=302)
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            # Получаем информацию о документе
+            doc_response = await client.get(
+                f"/api/documents/{document_id}",
+                headers={"X-Session-Key": session_key}
+            )
+            document = doc_response.json() if doc_response.ok else {}
+            
+            # Получаем проект
+            if document.get('project_id'):
+                proj_response = await client.get(
+                    f"/api/projects/{document['project_id']}",
+                    headers={"X-Session-Key": session_key}
+                )
+                project = proj_response.json() if proj_response.ok else {}
+            else:
+                project = {}
+        except Exception as e:
+            print(f"ERROR: {e}")
+            return RedirectResponse(url="/documents", status_code=302)
+    
+    return templates.TemplateResponse("document_detail.html", {
+        "request": request,
+        "document": {
+            "id": document_id,
+            "name": document.get('name', ''),
+            "project_name": project.get('name', '') if project else '',
+            "category": document.get('category', 'other'),
+            "page_count": document.get('page_count', 0)
+        }
+    })
+
+
 @router.get("/drawing-calculations", response_class=HTMLResponse)
 async def drawing_calculations_page(request: Request):
     """Страница расчётов чертежей"""

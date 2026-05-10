@@ -1,0 +1,72 @@
+﻿============================================================
+������ ������ ��� �������� ML ������
+============================================================
+
+����� �������: 99
+
+������������� �� ����������:
+  drawing             :  55 ���. ( 55.6%)
+  specification       :  43 ���. ( 43.4%)
+  scheme              :   1 ���. (  1.0%)
+
+����� ����������: 1
+
+��������� � �� ��������:
+  ������� ������������ ���� �������� 1    :  99 ���., Counter({'drawing': 55, 'specification': 43, 'scheme': 1})
+
+============================================================
+������� METADATA
+============================================================
+
+���. 16-1:
+  ���������: drawing
+  �����������: 0.95
+  content_type: text
+  ���������� ��������:
+    images: 0
+    has_table: False
+    has_signatures: False
+
+���. 16-2:
+  ���������: drawing
+  �����������: 0.95
+  content_type: text
+  ���������� ��������:
+    images: 0
+    has_table: False
+    has_signatures: False
+
+���. 16-3:
+  ���������: drawing
+  �����������: 0.95
+  content_type: text
+  ���������� ��������:
+    images: 0
+    has_table: False
+    has_signatures: False
+
+============================================================
+�������� ������
+============================================================
+
+������� ��� metadata: 0 (0.0%)
+������� � ������ ������������ (<0.5): 0
+
+============================================================
+������������
+============================================================
+python : Traceback (most recent call last):
+строка:1 знак:67
++ ... ualifying-work"; python scripts/inspect_training_data.py 2>&1 | Out-F ...
++                      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Traceback (most recent call last)::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File "C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work\scripts\inspect_training_data.py", line 92, in <mod
+ule>
+    print("\n\u2713 ���������� ������ ��� �������� ��������")
+    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Python314\Lib\encodings\cp1251.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2713' in position 2: character maps to <undefined>

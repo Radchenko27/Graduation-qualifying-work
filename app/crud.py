@@ -4,6 +4,7 @@ from typing import Type, TypeVar, Generic, List, Optional
 from datetime import datetime, date
 
 from . import models
+from .services.minio_client import minio_client
 
 ModelType = TypeVar("ModelType", bound=models.Base)
 
@@ -54,6 +55,7 @@ AuthSessions = CRUDBase(models.AuthSession)
 DrawingCalculations = CRUDBase(models.DrawingCalculation)
 Estimates = CRUDBase(models.Estimate)
 EstimateItems = CRUDBase(models.EstimateItem)
+DocumentPages = CRUDBase(models.DocumentPage)
 
 
 class UserCRUD(CRUDBase[models.User]):
@@ -146,6 +148,30 @@ class ProjectCRUD(CRUDBase[models.Project]):
         
         return project
 
+    def remove(self, db: Session, id: int) -> None:
+        """Удалить проект и все файлы документов из MinIO"""
+        project = self.get(db, id)
+        if project is None:
+            return
+
+        # Получаем все документы проекта до удаления
+        documents = db.query(models.Document).filter(
+            models.Document.project_id == id
+        ).all()
+
+        # Удаляем файлы документов из MinIO
+        for doc in documents:
+            if doc.file_path:
+                try:
+                    object_key = doc.file_path.replace("minio://", "")
+                    minio_client.delete_file(object_key)
+                except Exception as e:
+                    print(f"[WARN] Failed to delete file for document {doc.id}: {e}")
+
+        # SQLAlchemy cascade удалит все связанные записи из БД
+        db.delete(project)
+        db.commit()
+        
 
 class DocumentCRUD(CRUDBase[models.Document]):
     def get_by_category(self, db: Session, project_id: int, category: str, skip: int = 0, limit: int = 100) -> List[models.Document]:
@@ -160,6 +186,30 @@ class DocumentCRUD(CRUDBase[models.Document]):
         return db.query(models.Document).filter(
             models.Document.project_id == project_id
         ).offset(skip).limit(limit).all()
+        
+    def remove(self, db: Session, id: int) -> None:
+        """Удалить документ, связанные страницы и файл из MinIO"""
+        obj = self.get(db, id)
+        if obj is None:
+            return
+
+        # Удаляем файл из MinIO если есть
+        if obj.file_path:
+            try:
+                object_key = obj.file_path.replace("minio://", "")
+                minio_client.delete_file(object_key)
+            except Exception as e:
+                # Логируем ошибку, но не прерываем удаление из БД
+                print(f"[WARN] Failed to delete file from MinIO: {e}")
+
+        # Удаляем связанные страницы напрямую, чтобы избежать ленивой загрузки
+        db.query(models.DocumentPage).filter(
+            models.DocumentPage.document_id == id
+        ).delete(synchronize_session=False)
+
+        # Затем удаляем сам документ
+        db.delete(obj)
+        db.commit()
         
 
 class EstimateCRUD(CRUDBase[models.Estimate]):

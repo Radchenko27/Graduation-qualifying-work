@@ -1,0 +1,3 @@
+﻿[LayoutLM] ������ �� ����������: No module named 'transformers'
+[LayoutLM] ���������� fallback �� rule-based
+Classifier v2 OK, layoutlm_available: False

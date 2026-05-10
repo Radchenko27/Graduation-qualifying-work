@@ -1,0 +1,2 @@
+﻿document_pages exists: True
+Columns: ['id', 'document_id', 'page_number', 'category', 'confidence', 'content_type', 'page_metadata']

@@ -1,0 +1,14 @@
+﻿Tables in DB: ['alembic_version', 'auth_sessions', 'documents', 'drawing_calculations', 'drawings', 'estimate_items', 'estimates', 'material_drawings', 'materials', 'project_shares', 'project_users', 'projects', 'reports', 'users']
+
+documents columns: ['category', 'created_at', 'doc_type', 'file_hash', 'file_path', 'id', 'name', 'page_count', 'project_id']
+Has 'category': True
+Has 'page_count': True
+
+Has document_pages: False
+Has drawing_calculations: True
+Has estimates: True
+project_shares columns: ['access_level', 'id', 'owner_id', 'project_id', 'shared_at', 'shared_with_id']
+Has 'access_level': True
+materials columns: ['id', 'mark', 'name', 'price', 'type']
+
+Alembic versions: ['2f9e6573f385']
