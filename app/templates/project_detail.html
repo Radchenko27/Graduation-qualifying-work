@@ -4,12 +4,16 @@
 
 {% block content %}
 <div class="card-header" style="margin-bottom: 1rem;">
-    <div>
-        <h2 class="card-title">{{ project.name }}</h2>
-        <p style="color: #666; margin-top: 0.5rem;">{{ project.description }}</p>
+    <div style="flex: 1;">
+        <h2 class="card-title" id="projectName">{{ project.name }}</h2>
+        <p id="projectDescription" style="color: #666; margin-top: 0.5rem;">{{ project.description or 'Нет описания' }}</p>
+        <small style="color: #999;">
+            Дата создания: {{ project.created_at or 'Не указана' }}
+        </small>
     </div>
     <div style="display: flex; gap: 0.5rem;">
-        <button class="btn btn-success" onclick="openShareModal()">Поделиться</button>
+        <button class="btn btn-primary" onclick="openEditModal()">Редактировать</button>
+        <button class="btn btn-success" onclick="openShareModal()">Управление доступом</button>
         <a href="/projects" class="btn btn-secondary">Назад</a>
     </div>
 </div>
@@ -36,50 +40,85 @@
     </div>
 </div>
 
-<!-- Модальное окно выбора пользователей для шаринга -->
-<div id="shareModal" class="modal" style="display: none;">
-    <div class="modal-content" style="max-width: 700px;">
+<!-- Модальное окно редактирования проекта -->
+<div id="editModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 600px;">
         <div class="modal-header">
-            <h3>Поделиться проектом: {{ project.name }}</h3>
+            <h3>Редактировать проект</h3>
+            <button class="modal-close" onclick="closeEditModal()">&times;</button>
+        </div>
+        <div class="modal-body">
+            <form id="editProjectForm">
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label for="editProjectName">Название</label>
+                    <input type="text" id="editProjectName" class="form-control" required>
+                </div>
+                
+                <div class="form-group" style="margin-bottom: 1rem;">
+                    <label for="editProjectDescription">Описание</label>
+                    <textarea id="editProjectDescription" class="form-control" rows="3"></textarea>
+                </div>
+                
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">Сохранить</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeEditModal()">Отмена</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно управления доступом -->
+<div id="shareModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 800px;">
+        <div class="modal-header">
+            <h3>Управление доступом: <span id="shareProjectName"></span></h3>
             <button class="modal-close" onclick="closeShareModal()">&times;</button>
         </div>
         <div class="modal-body">
-            <!-- Поиск пользователей -->
+            <!-- Секция списка участников -->
+            <div style="margin-bottom: 1.5rem;">
+                <h4 style="margin-bottom: 0.75rem;">Участники проекта</h4>
+                <div id="participantsList" style="max-height: 300px; overflow-y: auto; border: 1px solid #eee; border-radius: 4px;">
+                    <p style="text-align: center; color: #666; padding: 1rem;">Загрузка...</p>
+                </div>
+            </div>
+            
+            <hr style="margin: 1.5rem 0;">
+            
+            <!-- Секция добавления нового пользователя -->
+            <h4 style="margin-bottom: 0.75rem;">Добавить участника</h4>
             <div class="form-group" style="margin-bottom: 1rem;">
                 <label>Поиск пользователя</label>
                 <input type="text" id="userSearch" placeholder="Введите имя или username..." 
                        style="width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px;">
             </div>
             
-            <!-- Список пользователей -->
-            <div id="userList" style="max-height: 300px; overflow-y: auto; margin-bottom: 1rem;">
-                <p style="text-align: center; color: #666;">Загрузка...</p>
+            <div id="userList" style="max-height: 200px; overflow-y: auto; margin-bottom: 1rem;">
+                <p style="text-align: center; color: #666;">Введите имя для поиска</p>
             </div>
             
-            <!-- Форма добавления выбранного пользователя -->
             <div id="shareFormContainer" style="display: none; padding: 1rem; background: #f9f9f9; border-radius: 4px;">
-                <h4>Добавить доступ</h4>
                 <p><strong>Пользователь:</strong> <span id="selectedUserName"></span></p>
                 <input type="hidden" id="selectedUserId">
                 
                 <div class="form-group" style="margin-bottom: 1rem;">
                     <label>Уровень доступа</label>
                     <select id="accessLevel" style="width: 100%; padding: 0.5rem; border: 1px solid #ccc; border-radius: 4px;">
-                        <option value="read">👁️ Чтение (только просмотр)</option>
-                        <option value="write">✏️ Редактирование (изменение документов)</option>
-                        <option value="admin">👑 Администратор (полный доступ)</option>
+                        <option value="read">Чтение (только просмотр)</option>
+                        <option value="write">Редактирование (изменение документов)</option>
+                        <option value="admin">Администратор (полный доступ)</option>
                     </select>
                 </div>
                 
                 <div style="display: flex; gap: 0.5rem;">
-                    <button id="shareBtn" class="btn btn-success">Поделиться</button>
+                    <button id="shareBtn" class="btn btn-success">Добавить</button>
                     <button class="btn btn-secondary" onclick="cancelShare()">Отмена</button>
                 </div>
             </div>
             
-            <!-- Сообщение об успехе -->
-            <div id="successMessage" style="display: none; padding: 1rem; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px; margin-bottom: 1rem;">
-                ✅ <strong>Успешно!</strong> Проект поделён с пользователем.
+            <div id="successMessage" style="display: none; padding: 1rem; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px;">
+                <strong>Успешно!</strong> Действие выполнено.
             </div>
         </div>
     </div>
@@ -89,41 +128,161 @@
 {% block scripts %}
 <script>
 let currentProjectId = {{ project_id }};
+let currentProjectName = {{ project.name|tojson }};
+let currentProjectDescription = {{ project.description|tojson }};
+let currentProjectCreatedAt = {{ project.created_at|tojson }};
 
-// Открыть модальное окно
-function openShareModal() {
-    document.getElementById('shareModal').style.display = 'block';
-    document.getElementById('userList').innerHTML = '<p style="text-align: center; color: #666;">Загрузка...</p>';
-    document.getElementById('shareFormContainer').style.display = 'none';
-    document.getElementById('successMessage').style.display = 'none';
-    loadUsers();
+console.log('Project data loaded:', {
+    id: currentProjectId,
+    name: currentProjectName,
+    description: currentProjectDescription,
+    created_at: currentProjectCreatedAt
+});
+
+// === Редактирование проекта ===
+
+function openEditModal() {
+    document.getElementById('editProjectName').value = currentProjectName || '';
+    document.getElementById('editProjectDescription').value = currentProjectDescription || '';
+    document.getElementById('editModal').style.display = 'block';
 }
 
-// Закрыть модальное окно
+function closeEditModal() {
+    document.getElementById('editModal').style.display = 'none';
+}
+
+document.getElementById('editProjectForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    if (submitBtn.disabled) return;
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Сохранение...';
+    
+    const data = {
+        name: document.getElementById('editProjectName').value,
+        description: document.getElementById('editProjectDescription').value
+    };
+    
+    try {
+        const response = await fetch(`/api/projects/${currentProjectId}`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Session-Key': localStorage.getItem('session_key')
+            },
+            body: JSON.stringify(data)
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Ошибка сохранения');
+        }
+        
+        const project = await response.json();
+        currentProjectName = project.name;
+        currentProjectDescription = project.description || '';
+        
+        document.getElementById('projectName').textContent = currentProjectName;
+        document.getElementById('projectDescription').textContent = currentProjectDescription || 'Нет описания';
+        
+        showMessage('Проект сохранён', 'success');
+        closeEditModal();
+    } catch (error) {
+        showMessage(error.message, 'error');
+    } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Сохранить';
+    }
+});
+
+// === Управление доступом ===
+
+function openShareModal() {
+    document.getElementById('shareProjectName').textContent = currentProjectName;
+    document.getElementById('shareModal').style.display = 'block';
+    document.getElementById('shareFormContainer').style.display = 'none';
+    document.getElementById('successMessage').style.display = 'none';
+    document.getElementById('userSearch').value = '';
+    document.getElementById('userList').innerHTML = '<p style="text-align: center; color: #666;">Введите имя для поиска</p>';
+    loadParticipants();
+}
+
 function closeShareModal() {
     document.getElementById('shareModal').style.display = 'none';
 }
 
-// Отменить выбор пользователя
 function cancelShare() {
     document.getElementById('shareFormContainer').style.display = 'none';
     document.getElementById('selectedUserId').value = '';
 }
 
-// Загрузить список пользователей
+async function loadParticipants() {
+    const container = document.getElementById('participantsList');
+    
+    try {
+        const response = await fetch(`/api/projects/${currentProjectId}/shares`, {
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') }
+        });
+        
+        if (!response.ok) throw new Error('Ошибка загрузки участников');
+        
+        const shares = await response.json();
+        
+        if (shares.length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: #666; padding: 1rem;">Участников нет. Добавьте первого участника.</p>';
+            return;
+        }
+        
+        container.innerHTML = shares.map(share => {
+            const accessLabels = {
+                'read': 'Чтение',
+                'write': 'Редактирование',
+                'admin': 'Администратор'
+            };
+            const accessColors = {
+                'read': '#6c757d',
+                'write': '#007bff',
+                'admin': '#28a745'
+            };
+            
+            return `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border-bottom: 1px solid #eee;">
+                    <div>
+                        <strong>${share.owner_username || 'Владелец'}</strong><br>
+                        <small style="color: #666;">${share.owner_email || ''}</small>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 1rem;">
+                        <span class="badge" style="background: ${accessColors[share.access_level]}; color: white;">
+                            ${accessLabels[share.access_level]}
+                        </span>
+                        ${share.access_level !== 'admin' ? `
+                            <button class="btn btn-danger btn-sm" onclick="removeParticipant(${share.shared_with_id})">Удалить</button>
+                        ` : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+    } catch (error) {
+        container.innerHTML = `<p style="text-align: center; color: red; padding: 1rem;">${error.message}</p>`;
+    }
+}
+
 async function loadUsers(search = '') {
     const userList = document.getElementById('userList');
     
+    if (!search || search.length < 2) {
+        userList.innerHTML = '<p style="text-align: center; color: #666;">Введите минимум 2 символа</p>';
+        return;
+    }
+    
     try {
-        const url = search 
-            ? `/api/users/search?q=${encodeURIComponent(search)}`
-            : '/api/users/';
-        
+        const url = `/api/users/search?q=${encodeURIComponent(search)}`;
         const response = await fetch(url, {
             headers: { 'X-Session-Key': localStorage.getItem('session_key') }
         });
         
-        if (!response.ok) throw new Error('Ошибка загрузки пользователей');
+        if (!response.ok) throw new Error('Ошибка поиска');
         
         const users = await response.json();
         
@@ -133,13 +292,10 @@ async function loadUsers(search = '') {
         }
         
         userList.innerHTML = users.map(u => `
-            <div style="padding: 0.75rem; border-bottom: 1px solid #eee; cursor: pointer; display: flex; justify-content: space-between; align-items: center;" 
+            <div style="padding: 0.75rem; border-bottom: 1px solid #eee; cursor: pointer;" 
                  onclick="selectUser(${u.id}, '${escapeHtml(u.first_name || '')} ${escapeHtml(u.last_name || '')}')">
-                <div>
-                    <strong>${escapeHtml(u.first_name || '')} ${escapeHtml(u.last_name || '')}</strong><br>
-                    <small style="color: #666;">@${escapeHtml(u.username)}</small>
-                </div>
-                <span style="color: #007bff;">➜</span>
+                <strong>${escapeHtml(u.first_name || '')} ${escapeHtml(u.last_name || '')}</strong><br>
+                <small style="color: #666;">@${escapeHtml(u.username)} | ${escapeHtml(u.email || '')}</small>
             </div>
         `).join('');
     } catch (error) {
@@ -147,7 +303,6 @@ async function loadUsers(search = '') {
     }
 }
 
-// Выбрать пользователя
 function selectUser(userId, userName) {
     document.getElementById('selectedUserId').value = userId;
     document.getElementById('selectedUserName').textContent = userName;
@@ -155,7 +310,6 @@ function selectUser(userId, userName) {
     document.getElementById('successMessage').style.display = 'none';
 }
 
-// Поделиться с пользователем
 async function shareProject() {
     const userId = document.getElementById('selectedUserId').value;
     const accessLevel = document.getElementById('accessLevel').value;
@@ -180,22 +334,42 @@ async function shareProject() {
         });
         
         if (response.ok) {
+            document.getElementById('successMessage').innerHTML = '<strong>Успешно!</strong> Пользователь добавлен.';
             document.getElementById('successMessage').style.display = 'block';
             document.getElementById('shareFormContainer').style.display = 'none';
-            // Сбросить форму
-            setTimeout(() => {
-                closeShareModal();
-            }, 2000);
+            document.getElementById('userSearch').value = '';
+            document.getElementById('userList').innerHTML = '<p style="text-align: center; color: #666;">Введите имя для поиска</p>';
+            loadParticipants();
         } else {
             const error = await response.json();
-            alert('Ошибка: ' + (error.detail || 'Не удалось поделиться'));
+            alert('Ошибка: ' + (error.detail || 'Не удалось добавить'));
         }
     } catch (error) {
         alert('Ошибка: ' + error.message);
     }
 }
 
-// Поиск пользователей (debounce)
+async function removeParticipant(userId) {
+    if (!confirm('Удалить доступ этого пользователя?')) return;
+    
+    try {
+        const response = await fetch(`/api/projects/${currentProjectId}/shares/${userId}`, {
+            method: 'DELETE',
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') }
+        });
+        
+        if (response.ok) {
+            showMessage('Доступ удалён', 'success');
+            loadParticipants();
+        } else {
+            const error = await response.json();
+            alert('Ошибка: ' + (error.detail || 'Не удалось удалить'));
+        }
+    } catch (error) {
+        alert('Ошибка: ' + error.message);
+    }
+}
+
 let searchTimeout;
 document.getElementById('userSearch').addEventListener('input', (e) => {
     clearTimeout(searchTimeout);
@@ -204,22 +378,43 @@ document.getElementById('userSearch').addEventListener('input', (e) => {
     }, 300);
 });
 
-// Обработчик кнопки "Поделиться"
 document.getElementById('shareBtn').addEventListener('click', shareProject);
 
-// Закрытие модального окна по клику вне его
 window.onclick = function(event) {
-    const modal = document.getElementById('shareModal');
-    if (event.target === modal) {
+    const editModal = document.getElementById('editModal');
+    const shareModal = document.getElementById('shareModal');
+    if (event.target === editModal) {
+        closeEditModal();
+    }
+    if (event.target === shareModal) {
         closeShareModal();
     }
 }
 
-// Экранирование HTML
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
+
+function showMessage(message, type) {
+    const div = document.createElement('div');
+    div.style.cssText = `
+        position: fixed;
+        top: 20px;
+        right: 20px;
+        padding: 1rem 1.5rem;
+        background: ${type === 'success' ? '#d4edda' : '#f8d7da'};
+        color: ${type === 'success' ? '#155724' : '#721c24'};
+        border: 1px solid ${type === 'success' ? '#c3e6cb' : '#f5c6cb'};
+        border-radius: 4px;
+        z-index: 9999;
+        animation: slideIn 0.3s ease;
+    `;
+    div.textContent = message;
+    document.body.appendChild(div);
+    setTimeout(() => div.remove(), 3000);
+}
 </script>
 {% endblock %}
+

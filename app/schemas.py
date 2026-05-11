@@ -41,6 +41,7 @@ class ProjectBase(BaseModel):
     work_scope: Optional[str] = None
     start_date: Optional[date] = None
     end_date: Optional[date] = None
+    created_at: Optional[date] = None
 
 class ProjectCreate(ProjectBase):
     pass
@@ -215,7 +216,11 @@ class ProjectShareCreate(ProjectShareBase):
 class ProjectShareRead(ProjectShareBase):
     id: int
     owner_id: int
+    shared_with_id: int
+    access_level: str
     shared_at: Optional[date] = None
+    owner_username: Optional[str] = None
+    owner_email: Optional[str] = None
 
     class Config:
         from_attributes = True

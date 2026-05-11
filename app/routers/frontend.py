@@ -79,16 +79,24 @@ async def project_detail_page(request: Request, project_id: int):
     """Детальная страница проекта"""
     session_key = get_session_key(request)
     if not session_key:
+        print(f"ERROR: No session key for project {project_id}")
         return RedirectResponse(url="/login", status_code=302)
     
     async with httpx.AsyncClient() as client:
         try:
-            response = await client.get(f"/api/projects/{project_id}", headers={"X-Session-Key": session_key})
-            project = response.json() if response.ok else {}
+            url = f"http://127.0.0.1:8000/api/projects/{project_id}"
+            response = await client.get(url, headers={"X-Session-Key": session_key})
+            print(f"DEBUG: API request to {url}, status={response.status_code}")
+            if response.status_code >= 400:
+                print(f"DEBUG: API response body={response.text[:200]}")
+                raise HTTPException(status_code=404, detail="Проект не найден")
+            project = response.json()
             print(f"DEBUG project detail: project = {project}")
+        except HTTPException:
+            raise
         except Exception as e:
             print(f"ERROR: {e}")
-            project = {}
+            raise HTTPException(status_code=404, detail="Проект не найден")
     
     return templates.TemplateResponse("project_detail.html", {
         "request": request,
