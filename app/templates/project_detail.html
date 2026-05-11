@@ -12,8 +12,6 @@
         </small>
     </div>
     <div style="display: flex; gap: 0.5rem;">
-        <button class="btn btn-primary" onclick="openEditModal()">Редактировать</button>
-        <button class="btn btn-success" onclick="openShareModal()">Управление доступом</button>
         <a href="/projects" class="btn btn-secondary">Назад</a>
     </div>
 </div>
@@ -25,18 +23,18 @@
     </div>
     
     <div class="card">
-        <h3 style="margin-bottom: 1rem;">Чертежи и расчёты</h3>
-        <a href="/projects/{{ project_id }}/calculations" class="btn btn-primary" style="width: 100%;">Расчёты элементов</a>
-    </div>
-    
-    <div class="card">
         <h3 style="margin-bottom: 1rem;">Сметы</h3>
         <a href="/projects/{{ project_id }}/estimates" class="btn btn-primary" style="width: 100%;">Управление сметами</a>
     </div>
     
     <div class="card">
+        <h3 style="margin-bottom: 1rem;">Редактирование</h3>
+        <button class="btn btn-primary" style="width: 100%;" onclick="openEditModal()">Редактировать проект</button>
+    </div>
+
+    <div class="card">
         <h3 style="margin-bottom: 1rem;">Участники</h3>
-        <a href="/projects/{{ project_id }}/users" class="btn btn-primary" style="width: 100%;">Управление доступом</a>
+        <button class="btn btn-success" style="width: 100%;" onclick="openShareModal()">Управление доступом</button>
     </div>
 </div>
 
@@ -246,11 +244,13 @@ async function loadParticipants() {
                 'admin': '#28a745'
             };
             
+            const displayName = `${share.shared_with_first_name || ''} ${share.shared_with_last_name || ''}`.trim() || share.shared_with_username || 'Пользователь';
+
             return `
                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem; border-bottom: 1px solid #eee;">
                     <div>
-                        <strong>${share.owner_username || 'Владелец'}</strong><br>
-                        <small style="color: #666;">${share.owner_email || ''}</small>
+                        <strong>${escapeHtml(displayName)}</strong><br>
+                        <small style="color: #666;">${escapeHtml(share.shared_with_email || '')}</small>
                     </div>
                     <div style="display: flex; align-items: center; gap: 1rem;">
                         <span class="badge" style="background: ${accessColors[share.access_level]}; color: white;">

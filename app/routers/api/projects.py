@@ -239,10 +239,11 @@ def get_project_shares(
         models.ProjectShare.project_id == project_id
     ).all()
     
-    # Добавляем информацию о владельце
+    # Добавляем информацию о владельце и пользователе, которому предоставлен доступ
     result = []
     for share in shares:
         owner = crud.Users.get(db, share.owner_id)
+        shared_with = crud.Users.get(db, share.shared_with_id)
         share_dict = {
             "id": share.id,
             "project_id": share.project_id,
@@ -251,7 +252,11 @@ def get_project_shares(
             "owner_id": share.owner_id,
             "shared_at": share.shared_at,
             "owner_username": owner.username if owner else None,
-            "owner_email": owner.email if owner else None
+            "owner_email": owner.email if owner else None,
+            "shared_with_username": shared_with.username if shared_with else None,
+            "shared_with_email": shared_with.email if shared_with else None,
+            "shared_with_first_name": shared_with.first_name if shared_with else None,
+            "shared_with_last_name": shared_with.last_name if shared_with else None
         }
         result.append(share_dict)
     
