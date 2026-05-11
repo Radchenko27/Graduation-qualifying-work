@@ -207,7 +207,7 @@ def share_project(
     return crud.ProjectShares.create(db, share_data_dict)
 
 
-@router.get("/{project_id}/shares", response_model=List[schemas.ProjectShareRead])
+@router.get("/{project_id}/shares")
 def get_project_shares(
     project_id: int,
     current_user: models.User = Depends(get_current_user),
@@ -234,11 +234,28 @@ def get_project_shares(
             detail="Нет доступа к проекту"
         )
     
+    # Получаем shares с информацией о владельце
     shares = db.query(models.ProjectShare).filter(
         models.ProjectShare.project_id == project_id
     ).all()
     
-    return shares
+    # Добавляем информацию о владельце
+    result = []
+    for share in shares:
+        owner = crud.Users.get(db, share.owner_id)
+        share_dict = {
+            "id": share.id,
+            "project_id": share.project_id,
+            "shared_with_id": share.shared_with_id,
+            "access_level": share.access_level,
+            "owner_id": share.owner_id,
+            "shared_at": share.shared_at,
+            "owner_username": owner.username if owner else None,
+            "owner_email": owner.email if owner else None
+        }
+        result.append(share_dict)
+    
+    return result
 
 
 @router.delete("/{project_id}/shares/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
