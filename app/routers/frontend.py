@@ -169,7 +169,7 @@ async def document_detail_page(request: Request, document_id: int):
             "id": document_id,
             "name": document.get('name', ''),
             "project_name": project.get('name', '') if project else '',
-            "category": document.get('category', 'other'),
+            "created_at": document.get('created_at', ''),
             "page_count": document.get('page_count', 0)
         }
     })

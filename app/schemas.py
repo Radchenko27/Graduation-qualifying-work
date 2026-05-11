@@ -48,6 +48,7 @@ class ProjectCreate(ProjectBase):
 class ProjectRead(ProjectBase):
     id: int
     owner_id: Optional[int] = None
+    category: Optional[str] = None  # 'my' или 'shared'
     class Config:
         from_attributes = True
 
@@ -71,7 +72,6 @@ DOCUMENT_CATEGORIES = [
 class DocumentBase(BaseModel):
     project_id: int
     doc_type: Optional[str] = None
-    category: str  # Категория документа (обязательная, фиксированная)
     created_at: Optional[date] = None
     name: str
     file_path: Optional[str] = None

@@ -11,13 +11,13 @@
     <!-- Сообщения об успехе/ошибке -->
     {% if request.url.query == 'success' %}
     <div class="alert alert-success" style="padding: 1rem; margin-bottom: 1rem; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px;">
-        ✅ Проект успешно поделён!
+        Проект успешно поделён!
     </div>
     {% endif %}
     
     {% if request.url.query and 'error' in request.url.query %}
     <div class="alert alert-error" style="padding: 1rem; margin-bottom: 1rem; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px;">
-        ❌ Ошибка при обмене проектом
+        Ошибка при обмене проектом
     </div>
     {% endif %}
     

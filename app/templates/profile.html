@@ -11,13 +11,13 @@
     <!-- Сообщения об успехе/ошибке -->
     {% if request.url.query == 'updated' %}
     <div class="alert alert-success" style="padding: 1rem; margin-bottom: 1rem; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px;">
-        ✅ Данные успешно обновлены!
+        Данные успешно обновлены!
     </div>
     {% endif %}
     
     {% if request.url.query == 'error_update_failed' %}
     <div class="alert alert-error" style="padding: 1rem; margin-bottom: 1rem; background: #f8d7da; border: 1px solid #f5c6cb; border-radius: 4px;">
-        ❌ Ошибка при обновлении данных
+        Ошибка при обновлении данных
     </div>
     {% endif %}
     

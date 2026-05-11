@@ -22,7 +22,6 @@ def create_document(
     project_id: int = Form(...),
     name: str = Form(...),
     doc_type: Optional[str] = Form(None),
-    category: str = Form('other'),
     auto_classify: bool = Form(False),
     file: Optional[UploadFile] = File(None),
     current_user: models.User = Depends(get_current_user),
@@ -87,7 +86,6 @@ def create_document(
         "project_id": project_id,
         "name": name,
         "doc_type": doc_type,
-        "category": category,
         "file_path": file_path,
         "file_hash": file_hash,
         "page_count": page_count,
@@ -129,7 +127,6 @@ def create_document(
 @router.get("/", response_model=List[schemas.DocumentRead])
 def read_documents(
     project_id: int = None,
-    category: str = None,
     skip: int = 0,
     limit: int = 100,
     current_user: models.User = Depends(get_current_user),
@@ -138,7 +135,6 @@ def read_documents(
     """
     Получить список документов с возможностью фильтрации:
     - project_id - документы конкретного проекта
-    - category - категория документа
 
     Требует аутентификации
     """
@@ -150,19 +146,11 @@ def read_documents(
                 detail="Нет доступа к проекту"
             )
         
-        if category:
-            documents = db.query(models.Document, models.Project.name.label('project_name')).join(
-                models.Project, models.Document.project_id == models.Project.id
-            ).filter(
-                models.Document.project_id == project_id,
-                models.Document.category == category
-            ).offset(skip).limit(limit).all()
-        else:
-            documents = db.query(models.Document, models.Project.name.label('project_name')).join(
-                models.Project, models.Document.project_id == models.Project.id
-            ).filter(
-                models.Document.project_id == project_id
-            ).offset(skip).limit(limit).all()
+        documents = db.query(models.Document, models.Project.name.label('project_name')).join(
+            models.Project, models.Document.project_id == models.Project.id
+        ).filter(
+            models.Document.project_id == project_id
+        ).offset(skip).limit(limit).all()
     else:
         # Получаем все документы проектов пользователя
         user_projects = crud.ProjectUsers.get_user_projects(db, current_user.id)
@@ -186,7 +174,6 @@ def read_documents(
             "project_name": project_name,
             "name": doc.name,
             "doc_type": doc.doc_type,
-            "category": doc.category,
             "created_at": doc.created_at,
             "file_path": doc.file_path,
             "file_hash": doc.file_hash,
@@ -260,7 +247,7 @@ def delete_document(
         )
     crud.Documents.remove(db, document_id)
     return None
-
+    
 
 @router.get("/{document_id}/download")
 def download_document(

@@ -5,7 +5,7 @@
 {% block content %}
 <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
     <h2 class="card-title">Мои проекты</h2>
-    <button class="btn btn-primary" onclick="openModal('createProjectModal')">+ Новый проект</button>
+    <button class="btn btn-primary" onclick="openModal('createProjectModal')">Новый проект</button>
 </div>
 
 <div class="card">
@@ -33,7 +33,7 @@
             {% for project in projects %}
             <tr>
                 <td><strong>{{ project.name }}</strong></td>
-                <td>{{ project.description[:50] }}{% if project.description|length > 50 %}...{% endif %}</td>
+                <td>{{ project.description[:50] if project.description else '' }}{% if project.description and project.description|length > 50 %}...{% endif %}</td>
                 <td>
                     {% if project.category == 'my' %}
                         <span class="badge badge-primary">Мой</span>
@@ -44,7 +44,9 @@
                 <td>{{ project.created_at[:10] if project.created_at else '-' }}</td>
                 <td class="table-actions">
                     <a href="/projects/{{ project.id }}" class="btn btn-primary btn-sm">Открыть</a>
+                    {% if project.category == 'my' %}
                     <button class="btn btn-success btn-sm" onclick="openShareModal({{ project.id }})">Поделиться</button>
+                    {% endif %}
                     <button class="btn btn-danger btn-sm" data-delete="/api/projects/{{ project.id }}" data-redirect="/projects">Удалить</button>
                 </td>
             </tr>
@@ -122,7 +124,7 @@
             </div>
             
             <div id="successMessage" style="display: none; padding: 1rem; background: #d4edda; border: 1px solid #c3e6cb; border-radius: 4px;">
-                ✅ <strong>Успешно!</strong> Проект поделён с пользователем.
+                <strong>Успешно!</strong> Проект поделён с пользователем.
             </div>
         </div>
     </div>
@@ -163,19 +165,29 @@ function renderProjects(projects) {
         return;
     }
     
-    tbody.innerHTML = projects.map(p => `
+    tbody.innerHTML = projects.map(p => {
+        const isMyProject = p.category === 'my';
+        const categoryBadge = isMyProject 
+            ? '<span class="badge badge-primary">Мой</span>'
+            : '<span class="badge badge-success">Общий</span>';
+        const shareButton = isMyProject 
+            ? `<a href="/projects/${p.id}/share" class="btn btn-success btn-sm">Поделиться</a>`
+            : '';
+        
+        return `
         <tr>
             <td><strong>${p.name}</strong></td>
             <td>${(p.description || '').substring(0, 50)}${(p.description || '').length > 50 ? '...' : ''}</td>
-            <td><span class="badge badge-primary">Мой</span></td>
+            <td>${categoryBadge}</td>
             <td>${p.created_at ? p.created_at.substring(0, 10) : '-'}</td>
             <td class="table-actions">
                 <a href="/projects/${p.id}" class="btn btn-primary btn-sm">Открыть</a>
-                ${p.id ? `<a href="/projects/${p.id}/share" class="btn btn-success btn-sm">Поделиться</a>` : ''}
+                ${shareButton}
                 <button class="btn btn-danger btn-sm" onclick="deleteProject(${p.id})">Удалить</button>
             </td>
         </tr>
-    `).join('');
+        `;
+    }).join('');
 }
 
 async function deleteProject(id) {
@@ -281,7 +293,6 @@ async function loadShareUsers(search = '') {
                     <strong>${escapeHtml(u.first_name || '')} ${escapeHtml(u.last_name || '')}</strong><br>
                     <small style="color: #666;">@${escapeHtml(u.username)}</small>
                 </div>
-                <span style="color: #007bff;">➜</span>
             </div>
         `).join('');
     } catch (error) {

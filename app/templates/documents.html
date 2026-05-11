@@ -5,7 +5,7 @@
 {% block content %}
 <div class="card-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
     <h2 class="card-title">Документы</h2>
-    <button class="btn btn-primary" onclick="openModal('uploadDocModal')">+ Загрузить документ</button>
+    <button class="btn btn-primary" onclick="openModal('uploadDocModal')">Загрузить документ</button>
 </div>
 
 <div class="card">
@@ -16,15 +16,6 @@
             <option value="{{ project.id }}">{{ project.name }}</option>
             {% endfor %}
         </select>
-        <select id="categoryFilter" class="form-control" style="max-width: 200px;">
-            <option value="">Все категории</option>
-            <option value="project_documentation">Проектная документация</option>
-            <option value="working_drawings">Рабочие чертежи</option>
-            <option value="specifications">Спецификации</option>
-            <option value="calculations">Расчёты</option>
-            <option value="permits">Разрешительная</option>
-            <option value="other">Другое</option>
-        </select>
         <button class="btn btn-secondary" onclick="loadDocuments()">Фильтр</button>
     </div>
     
@@ -33,9 +24,8 @@
             <tr>
                 <th>Название</th>
                 <th>Проект</th>
-                <th>Категория</th>
+                <th>Дата</th>
                 <th>Страниц</th>
-                <!-- <th>Дата</th> -->
                 <th>Действия</th>
             </tr>
         </thead>
@@ -44,19 +34,18 @@
             <tr>
                 <td><strong>{{ doc.name }}</strong></td>
                 <td>{{ doc.project_name or '-' }}</td>
-                <td><span class="badge badge-primary">{{ getCategoryName(doc.category) }}</span></td>
+                <td>{{ doc.created_at[:10] if doc.created_at else '-' }}</td>
                 <td>{{ doc.page_count or 0 }}</td>
-                <!-- <td>{{ doc.created_at[:10] if doc.created_at else '-' }}</td> -->
             <td class="table-actions">
                 <button class="btn btn-primary btn-sm" onclick="downloadDocument({{ doc.id }}, '{{ doc.name }}')">Скачать</button>
-                <button class="btn btn-info btn-sm" onclick="openDocumentView({{ doc.id }})">📂 Открыть</button>
-                <button class="btn btn-warning btn-sm" onclick="viewDocumentPages({{ doc.id }})">📄 Страницы</button>
+                <button class="btn btn-info btn-sm" onclick="openDocumentView({{ doc.id }})">Открыть</button>
+                <button class="btn btn-warning btn-sm" onclick="viewDocumentPages({{ doc.id }})">Страницы</button>
                 <button class="btn btn-danger btn-sm" data-delete="/api/documents/{{ doc.id }}" data-redirect="/documents">Удалить</button>
             </td>
             </tr>
             {% else %}
             <tr>
-                <td colspan="6" style="text-align: center; padding: 2rem;">Документов нет</td>
+                <td colspan="5" style="text-align: center; padding: 2rem;">Документов нет</td>
             </tr>
             {% endfor %}
         </tbody>
@@ -107,7 +96,7 @@
             <div class="form-group" style="background: #e7f3ff; padding: 0.75rem; border-radius: 4px; border-left: 3px solid #007bff;">
                 <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
                     <input type="checkbox" id="autoClassify" name="auto_classify" value="true" checked>
-                    <strong>🔍 Автоматическая классификация страниц (PDF)</strong>
+                    <strong>Автоматическая классификация страниц (PDF)</strong>
                 </label>
                 <small style="color: #666; display: block; margin-top: 0.25rem;">
                     Анализирует страницы PDF и распределяет их по категориям
@@ -115,7 +104,7 @@
             </div>
             
             <div class="form-actions">
-                <button type="submit" class="btn btn-primary">📤 Загрузить</button>
+                <button type="submit" class="btn btn-primary">Загрузить</button>
                 <button type="button" class="btn btn-secondary" onclick="closeModal('uploadDocModal')">Отмена</button>
             </div>
         </form>
@@ -173,12 +162,10 @@ function populateProjectSelects(projects) {
 
 async function loadDocuments() {
     const projectId = document.getElementById('projectFilter').value;
-    const category = document.getElementById('categoryFilter').value;
     let url = '/api/documents/';
     const params = new URLSearchParams();
     
     if (projectId) params.append('project_id', projectId);
-    if (category) params.append('category', category);
     
     if (params.toString()) url += '?' + params.toString();
     
@@ -196,18 +183,6 @@ async function loadDocuments() {
     }
 }
 
-function getCategoryName(category) {
-    const categories = {
-        'project_documentation': 'Проектная документация',
-        'working_drawings': 'Рабочие чертежи',
-        'specifications': 'Спецификации',
-        'calculations': 'Расчёты',
-        'permits': 'Разрешительная',
-        'other': 'Другое'
-    };
-    return categories[category] || category || 'Без категории';
-}
-
 function renderDocuments(docs) {
     const tbody = document.getElementById('documentsTable');
     if (docs.length === 0) {
@@ -219,12 +194,12 @@ function renderDocuments(docs) {
         <tr>
             <td><strong>${d.name}</strong></td>
             <td>${d.project_name || '-'}</td>
-            <td><span class="badge badge-primary">${getCategoryName(d.category)}</span></td>
+            <td>${d.created_at ? d.created_at.substring(0, 10) : '-'}</td>
             <td>${d.page_count || 0}</td>
             <td class="table-actions">
                 <button class="btn btn-primary btn-sm" onclick="downloadDocument(${d.id}, '${d.name}')">Скачать</button>
-                <button class="btn btn-info btn-sm" onclick="openDocumentView(${d.id})">📂 Открыть</button>
-                <button class="btn btn-warning btn-sm" onclick="viewDocumentPages(${d.id})">📄 Страницы</button>
+                <button class="btn btn-info btn-sm" onclick="openDocumentView(${d.id})">Открыть</button>
+                <button class="btn btn-warning btn-sm" onclick="viewDocumentPages(${d.id})">Страницы</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteDocument(${d.id})">Удалить</button>
             </td>
         </tr>
@@ -410,7 +385,7 @@ document.getElementById('uploadDocForm').addEventListener('submit', async (e) =>
     const submitBtn = e.target.querySelector('button[type="submit"]');
     if (submitBtn.disabled) return;
     submitBtn.disabled = true;
-    submitBtn.textContent = '⏳ Загрузка...';
+    submitBtn.textContent = 'Загрузка...';
     
     const formData = new FormData(e.target);
     
@@ -418,7 +393,6 @@ document.getElementById('uploadDocForm').addEventListener('submit', async (e) =>
     data.append('file', formData.get('file'));
     data.append('name', formData.get('name'));
     if (formData.get('project_id')) data.append('project_id', formData.get('project_id'));
-    data.append('category', 'other');
     if (formData.get('auto_classify')) data.append('auto_classify', 'true');
     
     try {
@@ -445,7 +419,7 @@ document.getElementById('uploadDocForm').addEventListener('submit', async (e) =>
     } catch (error) {
         showMessage(error.message, 'error');
         submitBtn.disabled = false;
-        submitBtn.textContent = '📤 Загрузить';
+        submitBtn.textContent = 'Загрузить';
     }
 });
 

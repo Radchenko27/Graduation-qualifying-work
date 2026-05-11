@@ -20,7 +20,9 @@ def create_project(
     Требует аутентификации
     Текущий пользователь становится владельцем проекта
     """
+    from datetime import date
     project_data = project.model_dump()
+    project_data['created_at'] = date.today()
     return crud.Projects.create_with_owner(db, project_data, owner_id=current_user.id)
 
 
@@ -37,23 +39,40 @@ def read_projects(
     Получить список проектов с возможностью фильтрации:
     - category='my' - только мои проекты
     - category='shared' - проекты, предоставленные мне
-    - search - поиск по названию
+    - search - поиск по названию (во всех доступных проектах)
 
     Требует аутентификации
     """
     if search:
-        # Поиск по названию
-        projects = crud.Projects.search_by_name(db, name=search, owner_id=current_user.id, skip=skip, limit=limit)
+        # Поиск по названию во всех доступных проектах (мои + общие)
+        projects = crud.Projects.search_by_name(db, name=search, user_id=current_user.id, skip=skip, limit=limit)
+        # Добавляем категорию для каждого проекта
+        for p in projects:
+            if p.owner_id == current_user.id:
+                p.category = 'my'
+            else:
+                p.category = 'shared'
     elif category == 'my':
         # Только мои проекты
         projects = crud.Projects.get_by_owner(db, owner_id=current_user.id, skip=skip, limit=limit)
+        for p in projects:
+            p.category = 'my'
     elif category == 'shared':
         # Проекты, предоставленные мне
         projects = crud.Projects.get_shared_with_user(db, user_id=current_user.id, skip=skip, limit=limit)
+        for p in projects:
+            p.category = 'shared'
     else:
         # Все проекты (мои + предоставленные)
         my_projects = crud.Projects.get_by_owner(db, owner_id=current_user.id)
         shared_projects = crud.Projects.get_shared_with_user(db, user_id=current_user.id)
+        
+        # Добавляем категорию для каждого проекта
+        for p in my_projects:
+            p.category = 'my'
+        for p in shared_projects:
+            p.category = 'shared'
+        
         # Объединяем и убираем дубликаты
         all_projects = {p.id: p for p in my_projects + shared_projects}
         projects = list(all_projects.values())[skip:skip+limit]

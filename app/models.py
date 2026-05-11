@@ -31,6 +31,7 @@ class Project(Base):
     work_scope = Column(Text, nullable=True)
     start_date = Column(Date, nullable=True)
     end_date = Column(Date, nullable=True)
+    created_at = Column(Date, nullable=True)  # Дата создания проекта
 
     documents = relationship("Document", back_populates="project", cascade="all, delete-orphan")
     drawings = relationship("Drawing", back_populates="project", cascade="all, delete-orphan")
@@ -47,7 +48,6 @@ class Document(Base):
     id = Column(Integer, primary_key=True, index=True)
     project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"))
     doc_type = Column(String(100))
-    category = Column(String(100), nullable=False)  # Категория документа (обязательная)
     created_at = Column(Date)
     name = Column(String(255))
     file_path = Column(String(1024), nullable=True)

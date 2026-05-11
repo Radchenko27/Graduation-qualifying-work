@@ -9,13 +9,13 @@
         <h2 class="card-title">{{ document.name }}</h2>
         <small style="color: #666;">
             Проект: {{ document.project_name or '-' }} | 
-            Категория: {{ getCategoryName(document.category) }} | 
+            Дата: {{ document.created_at[:10] if document.created_at else '-' }} | 
             Страниц: {{ document.page_count or 0 }}
         </small>
     </div>
     <div>
-        <button class="btn btn-primary" onclick="downloadDocument()">📥 Скачать</button>
-        <button class="btn btn-warning" onclick="reclassifyDocument()">🔍 Переклассифицировать</button>
+        <button class="btn btn-primary" onclick="downloadDocument()">Скачать</button>
+        <button class="btn btn-warning" onclick="reclassifyDocument()">Переклассифицировать</button>
     </div>
 </div>
 
@@ -34,7 +34,7 @@
 <!-- Статистика классификации -->
 <div id="classificationStats" class="card" style="margin-bottom: 1rem; display: none;">
     <div class="card-body">
-        <h4 style="margin: 0 0 0.75rem 0;">📊 Результаты классификации</h4>
+        <h4 style="margin: 0 0 0.75rem 0;">Результаты классификации</h4>
         <div id="statsContent"></div>
     </div>
 </div>
@@ -42,9 +42,9 @@
 <!-- Папки с категориями страниц -->
 <div class="card">
     <div class="card-header">
-        <h3>📂 Страницы документа</h3>
+        <h3>Страницы документа</h3>
         <small style="color: #666;">
-            Нажмите "🔍 Переклассифицировать" для анализа страниц
+            Нажмите "Переклассифицировать" для анализа страниц
         </small>
     </div>
     <div class="card-body">
@@ -65,33 +65,28 @@ const DOCUMENT_ID = {{ document.id }};
 // Категории и их цвета
 const CATEGORIES = {
     'title': {
-        name: '📄 Титульник',
+        name: 'Титульник',
         color: '#6c757d',
-        icon: '📄',
         description: 'Титульные листы, обложки'
     },
     'drawing': {
-        name: '📐 Чертеж',
+        name: 'Чертеж',
         color: '#007bff',
-        icon: '📐',
         description: 'Рабочие чертежи, планы, разрезы'
     },
     'scheme': {
-        name: '🔷 Схема',
+        name: 'Схема',
         color: '#28a745',
-        icon: '🔷',
         description: 'Структурные, функциональные схемы'
     },
     'specification': {
-        name: '📊 Спецификация',
+        name: 'Спецификация',
         color: '#ffc107',
-        icon: '📊',
         description: 'Ведомости, таблицы материалов'
     },
     'other': {
-        name: '📁 Другое',
+        name: 'Другое',
         color: '#17a2b8',
-        icon: '📁',
         description: 'Всё остальное'
     }
 };
@@ -116,7 +111,6 @@ async function loadPages() {
         showMessage(error.message, 'error');
         document.getElementById('pagesFolders').innerHTML = `
             <div style="text-align: center; padding: 3rem; color: #dc3545;">
-                <div style="font-size: 3rem; margin-bottom: 1rem;">❌</div>
                 <p>${error.message}</p>
             </div>
         `;
@@ -158,9 +152,9 @@ async function loadStats() {
         statsDiv.innerHTML = `
             ${badgesHtml}
             <div style="display: flex; gap: 1.5rem; color: #666; font-size: 0.9rem;">
-                <span>📄 Всего страниц: <strong>${data.total_pages}</strong></span>
-                <span>✅ Классифицировано: <strong>${data.classified_pages}</strong></span>
-                <span>🎯 Средняя уверенность: <strong>${Math.round(data.avg_confidence * 100)}%</strong></span>
+                <span>Всего страниц: <strong>${data.total_pages}</strong></span>
+                <span>Классифицировано: <strong>${data.classified_pages}</strong></span>
+                <span>Средняя уверенность: <strong>${Math.round(data.avg_confidence * 100)}%</strong></span>
             </div>
         `;
         
@@ -178,10 +172,9 @@ function renderPagesFolders(data) {
     if (!data.pages || data.pages.length === 0) {
         container.innerHTML = `
             <div style="text-align: center; padding: 3rem; color: #666;">
-                <div style="font-size: 3rem; margin-bottom: 1rem;">📭</div>
                 <p>Страницы не классифицированы</p>
                 <p style="font-size: 0.9rem;">
-                    Нажмите кнопку <strong>"🔍 Реклассифицировать"</strong> для анализа документа
+                    Нажмите кнопку <strong>"Переклассифицировать"</strong> для анализа документа
                 </p>
             </div>
         `;
@@ -220,7 +213,6 @@ function renderPagesFolders(data) {
                 background: linear-gradient(135deg, ${catInfo.color}15 0%, ${catInfo.color}05 100%);
             ">
                 <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;">
-                    <span style="font-size: 1.5rem;">${catInfo.icon}</span>
                     <h4 style="margin: 0; color: ${catInfo.color};">${catInfo.name}</h4>
                     <span class="badge" style="background: ${catInfo.color}; color: white; margin-left: auto;">
                         ${count} стр.
@@ -255,7 +247,6 @@ function renderPagesFolders(data) {
     if (Object.values(pagesByCategory).every(p => p.length === 0)) {
         html = `
             <div style="text-align: center; padding: 3rem; color: #666;">
-                <div style="font-size: 3rem; margin-bottom: 1rem;">📭</div>
                 <p>Страницы не классифицированы</p>
             </div>
         `;
@@ -304,7 +295,7 @@ async function reclassifyDocument() {
     
     statusDiv.style.display = 'block';
     loadingSpinner.style.display = 'inline-block';
-    statusMessage.innerHTML = '<span>⏳ Анализ страниц...</span>';
+    statusMessage.innerHTML = '<span>Анализ страниц...</span>';
     
     try {
         const formData = new FormData();
@@ -321,7 +312,7 @@ async function reclassifyDocument() {
             throw new Error(error.detail || 'Ошибка классификации');
         }
         
-        statusMessage.innerHTML = '<span style="color: #28a745;">✅ Классификация завершена!</span>';
+        statusMessage.innerHTML = '<span style="color: #28a745;">Классификация завершена!</span>';
         showMessage('Страницы переклассифицированы!', 'success');
         
         setTimeout(() => {
@@ -332,7 +323,7 @@ async function reclassifyDocument() {
         
     } catch (error) {
         loadingSpinner.style.display = 'none';
-        statusMessage.innerHTML = `<span style="color: #dc3545;">❌ ${error.message}</span>`;
+        statusMessage.innerHTML = `<span style="color: #dc3545;">${error.message}</span>`;
         showMessage(error.message, 'error');
     }
 }

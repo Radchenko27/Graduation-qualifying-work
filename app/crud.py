@@ -120,15 +120,39 @@ class ProjectCRUD(CRUDBase[models.Project]):
             models.ProjectShare.shared_with_id == user_id
         ).offset(skip).limit(limit).all()
 
-    def search_by_name(self, db: Session, name: str, owner_id: int = None, skip: int = 0, limit: int = 100) -> List[models.Project]:
-        """Поиск проекта по названию"""
-        query = db.query(models.Project).filter(
-            models.Project.name.ilike(f"%{name}%")
-        )
-        if owner_id:
-            query = query.filter(models.Project.owner_id == owner_id)
-        return query.offset(skip).limit(limit).all()
-
+    def search_by_name(self, db: Session, name: str, user_id: int = None, skip: int = 0, limit: int = 100) -> List[models.Project]:
+        """
+        Поиск проекта по названию
+        
+        Если user_id указан - ищет все доступные проекты этого пользователя (мои + общие)
+        Если user_id=None - ищет только проекты, где пользователь является владельцем
+        """
+        if user_id is not None:
+            # Поиск среди всех доступных проектов пользователя
+            # Проекты, где пользователь является владельцем
+            my_projects = db.query(models.Project).filter(
+                models.Project.name.ilike(f"%{name}%"),
+                models.Project.owner_id == user_id
+            ).all()
+            
+            # Проекты, доступные через шаринг
+            shared_projects = db.query(models.Project).join(
+                models.ProjectShare, models.Project.id == models.ProjectShare.project_id
+            ).filter(
+                models.ProjectShare.shared_with_id == user_id,
+                models.Project.name.ilike(f"%{name}%")
+            ).all()
+            
+            # Убираем дубликаты по ID
+            all_projects = {p.id: p for p in my_projects + shared_projects}
+            return list(all_projects.values())[skip:skip+limit]
+        else:
+            # Поиск только проектов, где пользователь является владельцем (без user_id)
+            query = db.query(models.Project).filter(
+                models.Project.name.ilike(f"%{name}%")
+            )
+            return query.offset(skip).limit(limit).all()
+        
     def create_with_owner(self, db: Session, obj_in_data: dict, owner_id: int) -> models.Project:
         """Создать проект с указанием владельца и добавлением владельца как участника"""
         obj_in_data["owner_id"] = owner_id
@@ -174,13 +198,6 @@ class ProjectCRUD(CRUDBase[models.Project]):
         
 
 class DocumentCRUD(CRUDBase[models.Document]):
-    def get_by_category(self, db: Session, project_id: int, category: str, skip: int = 0, limit: int = 100) -> List[models.Document]:
-        """Получить документы по категории"""
-        return db.query(models.Document).filter(
-            models.Document.project_id == project_id,
-            models.Document.category == category
-        ).offset(skip).limit(limit).all()
-        
     def get_by_project(self, db: Session, project_id: int, skip: int = 0, limit: int = 100) -> List[models.Document]:
         """Получить все документы проекта"""
         return db.query(models.Document).filter(
@@ -288,11 +305,23 @@ class EstimateCRUD(CRUDBase[models.Estimate]):
 
 class ProjectUserCRUD(CRUDBase[models.ProjectUser]):
     def check_access(self, db: Session, user_id: int, project_id: int) -> bool:
-        """Проверить доступ пользователя к проекту"""
-        return db.query(models.ProjectUser).filter(
+        """Проверить доступ пользователя к проекту (включая shared проекты)"""
+        # Проверка через ProjectUser
+        has_user_access = db.query(models.ProjectUser).filter(
             models.ProjectUser.user_id == user_id,
             models.ProjectUser.project_id == project_id
         ).first() is not None
+    
+        if has_user_access:
+            return True
+        
+        # Проверка через ProjectShare
+        has_share_access = db.query(models.ProjectShare).filter(
+            models.ProjectShare.shared_with_id == user_id,
+            models.ProjectShare.project_id == project_id
+        ).first() is not None
+        
+        return has_share_access
     
     def get_user_projects(self, db: Session, user_id: int, skip: int = 0, limit: int = 100) -> List[models.Project]:
         """Получить все проекты пользователя (включая общие)"""

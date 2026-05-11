@@ -1,4 +1,0 @@
-﻿[LayoutLM] ������ �� ����������: No module named 'transformers'
-[LayoutLM] ���������� fallback �� rule-based
-[ML] ������ �� �������, ���������� fallback
-OK, ml_model_available: False
