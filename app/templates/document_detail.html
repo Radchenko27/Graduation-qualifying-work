@@ -13,9 +13,29 @@
             Страниц: {{ document.page_count or 0 }}
         </small>
     </div>
-    <div>
+    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
         <button class="btn btn-primary" onclick="downloadDocument()">Скачать</button>
         <button class="btn btn-warning" onclick="reclassifyDocument()">Переклассифицировать</button>
+        <button class="btn btn-success" onclick="showSpecificationPanel()">Спецификации</button>
+        <button class="btn btn-info" onclick="parseFullDocument('json')">Обработать в JSON</button>
+        <button class="btn btn-dark" onclick="parseFullDocument('excel')">Обработать в Excel</button>
+        <button class="btn btn-secondary" onclick="reprocessDocument()" title="Переобработать PDF с text_blocks_details">Переобработать</button>
+    </div>
+</div>
+
+<!-- Панель спецификаций -->
+<div id="specificationPanel" class="card" style="margin-bottom: 1rem; display: none;">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <h4 style="margin: 0;">Спецификации</h4>
+        <button class="btn btn-sm btn-outline-secondary" onclick="hideSpecificationPanel()">Закрыть</button>
+    </div>
+    <div class="card-body">
+        <div id="specificationContent">
+            <div style="text-align: center; padding: 2rem; color: #666;">
+                <div class="spinner-border text-primary" role="status"></div>
+                <p style="margin-top: 1rem;">Загрузка информации о спецификациях...</p>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -40,18 +60,70 @@
 </div>
 
 <!-- Папки с категориями страниц -->
-<div class="card">
-    <div class="card-header">
-        <h3>Страницы документа</h3>
-        <small style="color: #666;">
-            Нажмите "Переклассифицировать" для анализа страниц
-        </small>
+<div class="card" style="margin-bottom: 1rem;">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin: 0;">Страницы документа</h3>
+        <button class="btn btn-sm btn-outline-primary" onclick="showAllPagesView()">
+            Просмотр всех страниц
+        </button>
     </div>
     <div class="card-body">
         <div id="pagesFolders">
             <div style="text-align: center; padding: 3rem; color: #666;">
-                <div style="font-size: 3rem; margin-bottom: 1rem;">📄</div>
+                <div style="font-size: 1.2rem; font-weight: bold; margin-bottom: 1rem;">PDF</div>
                 <p>Загрузка страниц...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Просмотр всех страниц -->
+<div id="allPagesView" class="card" style="margin-bottom: 1rem; display: none;">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <h3 style="margin: 0;">Все страницы</h3>
+        <div style="display: flex; gap: 0.5rem;">
+            <button class="btn btn-sm btn-outline-secondary" onclick="hideAllPagesView()">
+                Закрыть
+            </button>
+        </div>
+    </div>
+    <div class="card-body">
+        <!-- Навигация по страницам -->
+        <div style="margin-bottom: 1rem;">
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <button class="btn btn-sm btn-outline-primary" onclick="prevPage()" id="prevPageBtn">
+                    ← Предыдущая
+                </button>
+                <div style="flex: 1; text-align: center;">
+                    <span id="currentPageDisplay">Страница 1 из 0</span>
+                </div>
+                <button class="btn btn-sm btn-outline-primary" onclick="nextPage()" id="nextPageBtn">
+                    Следующая →
+                </button>
+            </div>
+            <!-- Быстрая навигация -->
+            <div style="margin-top: 0.75rem; display: flex; gap: 0.5rem; flex-wrap: wrap; justify-content: center;">
+                <input type="number" id="pageJumpInput" min="1" max="1000" 
+                       style="width: 80px; padding: 0.375rem 0.5rem; border: 1px solid #ced4da; border-radius: 4px;"
+                       placeholder="Стр.">
+                <button class="btn btn-sm btn-outline-secondary" onclick="jumpToPage()">
+                    Перейти
+                </button>
+            </div>
+        </div>
+        
+        <!-- Список страниц -->
+        <div id="pagesList" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0.75rem; margin-bottom: 1.5rem;">
+        </div>
+        
+        <!-- Детали текущей страницы -->
+        <div id="pageDetails" class="card" style="border-left: 4px solid #007bff;">
+            <div class="card-body">
+                <div id="pageDetailsContent">
+                    <div style="text-align: center; padding: 2rem; color: #666;">
+                        <p>Выберите страницу для просмотра деталей</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -61,6 +133,10 @@
 {% block scripts %}
 <script>
 const DOCUMENT_ID = {{ document.id }};
+
+// Глобальные переменные для просмотра страниц (должны быть объявлены ДО loadPages!)
+let allPagesData = [];
+let currentPageIndex = 0;
 
 // Категории и их цвета
 const CATEGORIES = {
@@ -106,6 +182,11 @@ async function loadPages() {
         }
         
         const data = await response.json();
+        
+        // Сохраняем данные для просмотра всех страниц
+        allPagesData = data.pages || [];
+        currentPageIndex = 0;
+        
         renderPagesFolders(data);
     } catch (error) {
         showMessage(error.message, 'error');
@@ -142,7 +223,7 @@ async function loadStats() {
             const catInfo = CATEGORIES[cat] || CATEGORIES['other'];
             badgesHtml += `
                 <span class="badge" style="background: ${catInfo.color}; color: white; font-size: 0.9rem; padding: 0.4rem 0.8rem;">
-                    ${catInfo.icon} ${catInfo.name}: ${count} стр.
+                    ${catInfo.name}: ${count} стр.
                 </span>
             `;
         });
@@ -328,7 +409,538 @@ async function reclassifyDocument() {
     }
 }
 
+// Показать панель спецификаций
+async function showSpecificationPanel() {
+    const panel = document.getElementById('specificationPanel');
+    const content = document.getElementById('specificationContent');
+    
+    panel.style.display = 'block';
+    content.innerHTML = `
+        <div style="text-align: center; padding: 2rem; color: #666;">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p style="margin-top: 1rem;">Загрузка информации о спецификациях...</p>
+        </div>
+    `;
+    
+    try {
+        const response = await fetch(`/api/documents/${DOCUMENT_ID}/specification-summary`, {
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки сводки спецификаций');
+        }
+        
+        const data = await response.json();
+        renderSpecificationSummary(data);
+        
+    } catch (error) {
+        content.innerHTML = `
+            <div style="text-align: center; padding: 2rem; color: #dc3545;">
+                <p>${error.message}</p>
+                <button class="btn btn-sm btn-outline-primary" onclick="loadSpecificationSummary()" style="margin-top: 1rem;">
+                    Попробовать снова
+                </button>
+            </div>
+        `;
+    }
+}
+
+// Скрыть панель спецификаций
+function hideSpecificationPanel() {
+    document.getElementById('specificationPanel').style.display = 'none';
+}
+
+// Отрисовка сводки спецификаций
+function renderSpecificationSummary(data) {
+    const content = document.getElementById('specificationContent');
+    
+    const specCount = data.specification_pages_count || 0;
+    
+    if (specCount === 0) {
+        content.innerHTML = `
+            <div style="text-align: center; padding: 2rem; color: #666;">
+                <div style="font-size: 1.2rem; font-weight: bold; margin-bottom: 1rem;">Спецификации</div>
+                <h5>Спецификации не найдены</h5>
+                <p style="color: #666; margin-bottom: 1rem;">
+                    В документе нет страниц, классифицированных как спецификации.
+                </p>
+                <p style="font-size: 0.9rem; color: #999;">
+                    Попробуйте переклассифицировать документ.
+                </p>
+        <button class="btn btn-warning btn-sm" onclick="hideSpecificationPanel(); reclassifyDocument();" style="margin-top: 1rem;">
+            Переклассифицировать
+        </button>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = `
+        <div style="margin-bottom: 1.5rem;">
+            <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+                <div style="font-size: 1.2rem; font-weight: bold;">Спецификации</div>
+                <div>
+                    <h5 style="margin: 0;">Найдено спецификаций</h5>
+                    <small style="color: #666;">${specCount} страниц со спецификациями</small>
+                </div>
+            </div>
+        </div>
+        
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+            <div class="card" style="border-left: 4px solid #ffc107; padding: 1rem;">
+                <div style="font-size: 0.85rem; color: #666;">Страниц</div>
+                <div style="font-size: 1.5rem; font-weight: bold; color: #ffc107;">${specCount}</div>
+            </div>
+            <div class="card" style="border-left: 4px solid #28a745; padding: 1rem;">
+                <div style="font-size: 0.85rem; color: #666;">Формат</div>
+                <div style="font-size: 1.5rem; font-weight: bold; color: #28a745;">JSON / Excel</div>
+            </div>
+        </div>
+        
+        <h6 style="margin-bottom: 0.75rem;">Страницы со спецификациями:</h6>
+        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem;">
+    `;
+    
+    data.specification_pages.forEach(page => {
+        const confidence = Math.round((page.confidence || 0) * 100);
+        html += `
+            <span class="badge" style="background: #ffc107; color: #000; font-size: 0.9rem; padding: 0.4rem 0.8rem;">
+                Стр. ${page.page_number} (${confidence}%)
+            </span>
+        `;
+    });
+    
+    html += `</div>`;
+    
+    html += `
+        <div style="border-top: 1px solid #dee2e6; padding-top: 1.5rem;">
+            <h6 style="margin-bottom: 0.75rem;">Экспортировать спецификации:</h6>
+            <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;">
+                <button class="btn btn-outline-primary" onclick="parseSpecifications('json')">
+                    Экспорт в JSON
+                </button>
+                <button class="btn btn-outline-success" onclick="parseSpecifications('excel')">
+                    Экспорт в Excel
+                </button>
+            </div>
+            <small style="color: #666; display: block; margin-top: 0.5rem;">
+                Спецификации будут сохранены в директорию output/specifications/
+            </small>
+        </div>
+    `;
+    
+    content.innerHTML = html;
+}
+
+// Парсинг спецификаций
+async function parseSpecifications(format) {
+    const content = document.getElementById('specificationContent');
+    
+    // Показываем индикатор загрузки
+    const originalContent = content.innerHTML;
+    content.innerHTML = `
+        <div style="text-align: center; padding: 2rem; color: #666;">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p style="margin-top: 1rem;">
+                Парсинг спецификаций и экспорт в ${format.toUpperCase()}...
+            </p>
+        </div>
+    `;
+    
+    try {
+        const response = await fetch(`/api/documents/${DOCUMENT_ID}/parse-specifications?format=${format}`, {
+            method: 'POST',
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') }
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Ошибка парсинга спецификаций');
+        }
+        
+        const result = await response.json();
+        
+        // Показываем результат
+        content.innerHTML = `
+            <div style="text-align: center; padding: 2rem; color: #28a745;">
+                <h5 style="margin-bottom: 0.5rem;">Успешно!</h5>
+                <p style="margin-bottom: 1rem;">
+                    Спецификации экспортированы в ${format.toUpperCase()}
+                </p>
+                <div class="alert alert-success" style="text-align: left; font-size: 0.9rem;">
+                    <strong>Путь к файлу:</strong><br>
+                    <code style="word-break: break-all;">${result.output_path}</code>
+                </div>
+                <div style="display: flex; gap: 0.5rem; justify-content: center; margin-top: 1rem;">
+                    <button class="btn btn-primary btn-sm" onclick="showSpecificationPanel()">
+                        Вернуться к спецификациям
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="hideSpecificationPanel()">
+                        Закрыть
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        showMessage(`Спецификации экспортированы: ${result.output_path}`, 'success');
+        
+    } catch (error) {
+        content.innerHTML = `
+            <div style="text-align: center; padding: 2rem; color: #dc3545;">
+                <h5 style="margin-bottom: 0.5rem;">Ошибка</h5>
+                <p style="margin-bottom: 1rem;">${error.message}</p>
+                <div style="display: flex; gap: 0.5rem; justify-content: center; margin-top: 1rem;">
+                    <button class="btn btn-warning btn-sm" onclick="showSpecificationPanel()">
+                        Попробовать снова
+                    </button>
+                    <button class="btn btn-outline-secondary btn-sm" onclick="hideSpecificationPanel()">
+                        Закрыть
+                    </button>
+                </div>
+            </div>
+        `;
+        
+        showMessage(error.message, 'error');
+    }
+}
+
+// Универсальный парсинг всего документа
+async function parseFullDocument(format) {
+    if (!confirm(`Обработать ВЕСЬ документ и экспортировать в ${format.toUpperCase()}?\n\nБудут обработаны все страницы в зависимости от их категории.`)) {
+        return;
+    }
+    
+    showMessage(`Обработка документа в ${format.toUpperCase()}...`, 'info');
+
+    try {
+        const response = await fetch(`/api/documents/${DOCUMENT_ID}/parse-full?format=${format}`, {
+            method: 'POST',
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') }
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Ошибка обработки документа');
+        }
+        
+        const result = await response.json();
+        showMessage(`Документ обработан: ${result.output_path}`, 'success');
+
+        // Показываем модальное окно с результатом
+        alert(`✅ Документ успешно обработан!\n\nФормат: ${format.toUpperCase()}\nПуть: ${result.output_path}\n\nЛисты Excel:\n• Сводка — статистика по категориям\n• Спецификации — все таблицы спецификаций\n• Чертежи — обозначения и названия\n• Элементы_схем — элементы схем\n• Титулы — метаданные`);
+
+    } catch (error) {
+        showMessage(error.message, 'error');
+    }
+}
+
+// Переобработка документа (с text_blocks_details)
+async function reprocessDocument() {
+    if (!confirm('Переобработать PDF с сохранением text_blocks_details?\n\nЭто обновит processed JSON файл с геометрическими данными блоков текста.')) {
+        return;
+    }
+    
+    showMessage('Переобработка PDF... Это может занять несколько минут', 'info');
+
+    try {
+        const response = await fetch(`/api/documents/${DOCUMENT_ID}/reprocess`, {
+            method: 'POST',
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') }
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Ошибка переобработки');
+        }
+        
+        const result = await response.json();
+        showMessage(`✅ ${result.message}`, 'success');
+        
+    } catch (error) {
+        showMessage(error.message, 'error');
+    }
+}
+
 // Загрузка страниц при загрузке страницы
 loadPages();
+
+// Показать просмотр всех страниц
+function showAllPagesView() {
+    document.getElementById('pagesFolders').parentElement.style.display = 'none';
+    document.getElementById('allPagesView').style.display = 'block';
+    renderPagesList();
+}
+
+// Скрыть просмотр всех страниц
+function hideAllPagesView() {
+    document.getElementById('allPagesView').style.display = 'none';
+    document.getElementById('pagesFolders').parentElement.style.display = 'block';
+}
+
+// Отрисовка списка страниц
+function renderPagesList() {
+    const container = document.getElementById('pagesList');
+    
+    if (allPagesData.length === 0) {
+        container.innerHTML = `
+            <div style="grid-column: 1/-1; text-align: center; padding: 3rem; color: #666;">
+                <p>Страницы не классифицированы</p>
+                <button class="btn btn-warning btn-sm" onclick="reclassifyDocument()" style="margin-top: 1rem;">
+                    Переклассифицировать
+                </button>
+            </div>
+        `;
+        return;
+    }
+    
+    let html = '';
+    
+    allPagesData.forEach((page, index) => {
+        const catInfo = CATEGORIES[page.category] || CATEGORIES['other'];
+        const isActive = index === currentPageIndex;
+        
+        html += `
+            <div onclick="selectPage(${index})" 
+                 style="
+                    border: 2px solid ${isActive ? catInfo.color : '#dee2e6'};
+                    border-radius: 8px;
+                    padding: 0.75rem;
+                    cursor: pointer;
+                    background: ${isActive ? catInfo.color + '15' : '#fff'};
+                    transition: all 0.2s;
+                 "
+                 onmouseover="this.style.borderColor='${catInfo.color}'; this.style.transform='scale(1.02)'"
+                 onmouseout="this.style.borderColor='${isActive ? catInfo.color : '#dee2e6'}'; this.style.transform='scale(1)'"
+            >
+                <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem;">
+                    <span style="font-size: 1.2rem; font-weight: bold; color: #333;">${page.page_number}</span>
+                    <span class="badge" style="background: ${catInfo.color}; color: white; font-size: 0.75rem;">
+                        ${catInfo.name}
+                    </span>
+                </div>
+                <div style="font-size: 0.75rem; color: #666;">
+                    Уверенность: ${Math.round((page.confidence || 0) * 100)}%
+                </div>
+            </div>
+        `;
+    });
+    
+    container.innerHTML = html;
+    
+    // Обновить навигацию
+    updateNavigation();
+    
+    // Показать детали текущей страницы
+    showPageDetails(currentPageIndex);
+}
+
+// Выбор страницы
+function selectPage(index) {
+    currentPageIndex = index;
+    renderPagesList();
+    showPageDetails(index);
+}
+
+// Показать детали страницы
+async function showPageDetails(index) {
+    const container = document.getElementById('pageDetailsContent');
+    const page = allPagesData[index];
+    
+    if (!page) {
+        container.innerHTML = '<p>Страница не найдена</p>';
+        return;
+    }
+    
+    const catInfo = CATEGORIES[page.category] || CATEGORIES['other'];
+    const confidence = Math.round((page.confidence || 0) * 100);
+    
+    // Парсим metadata если есть
+    let metadata = '';
+    if (page.page_metadata) {
+        try {
+            const meta = JSON.parse(page.page_metadata);
+            metadata = Object.entries(meta)
+                .map(([k, v]) => `<div><strong>${k}:</strong> ${v}</div>`)
+                .join('');
+        } catch (e) {
+            metadata = page.page_metadata;
+        }
+    }
+    
+    container.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem;">
+            <div style="font-size: 2rem; font-weight: bold; color: ${catInfo.color};">
+                Стр. ${page.page_number}
+            </div>
+            <span class="badge" style="background: ${catInfo.color}; font-size: 1rem; padding: 0.5rem 1rem;">
+                ${catInfo.name}
+            </span>
+            <div style="margin-left: auto; text-align: right;">
+                <div style="font-size: 0.85rem; color: #666;">Уверенность</div>
+                <div style="font-size: 1.2rem; font-weight: bold; color: ${catInfo.color};">${confidence}%</div>
+            </div>
+        </div>
+        
+        <!-- Изображение страницы -->
+        <div id="pageImageContainer" style="margin-bottom: 1rem; text-align: center;">
+            <div class="spinner-border text-primary" role="status"></div>
+            <p style="margin-top: 0.5rem;">Загрузка изображения...</p>
+        </div>
+        
+        <div style="margin-bottom: 1rem;">
+            <h6 style="margin-bottom: 0.5rem;">Информация:</h6>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.75rem;">
+                <div class="card" style="padding: 0.75rem; background: #f8f9fa;">
+                    <div style="font-size: 0.8rem; color: #666;">ID страницы</div>
+                    <div style="font-size: 1.1rem; font-weight: bold;">${page.id}</div>
+                </div>
+                <div class="card" style="padding: 0.75rem; background: #f8f9fa;">
+                    <div style="font-size: 0.8rem; color: #666;">Тип контента</div>
+                    <div style="font-size: 1.1rem; font-weight: bold;">${page.content_type || 'Не указан'}</div>
+                </div>
+            </div>
+        </div>
+        
+        ${metadata ? `
+            <div>
+                <h6 style="margin-bottom: 0.5rem;">Метаданные:</h6>
+                <div style="padding: 0.75rem; background: #f8f9fa; border-radius: 4px; font-size: 0.85rem;">
+                    ${metadata}
+                </div>
+            </div>
+        ` : ''}
+        
+        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #dee2e6;">
+            <button class="btn btn-sm btn-outline-primary" onclick="changeCategory(${page.id}, 'specification')">
+                Спецификация
+            </button>
+            <button class="btn btn-sm btn-outline-primary" onclick="changeCategory(${page.id}, 'drawing')">
+                Чертеж
+            </button>
+            <button class="btn btn-sm btn-outline-primary" onclick="changeCategory(${page.id}, 'scheme')">
+                Схема
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="changeCategory(${page.id}, 'other')">
+                Другое
+            </button>
+        </div>
+    `;
+    
+    // Загружаем изображение страницы
+    loadPageImage(page.page_number);
+}
+
+// Загрузить изображение страницы
+async function loadPageImage(pageNumber) {
+    const container = document.getElementById('pageImageContainer');
+    
+    if (!container) return;
+    
+    try {
+        const response = await fetch(`/api/documents/${DOCUMENT_ID}/pages/${pageNumber}/image`, {
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Ошибка загрузки изображения');
+        }
+        
+        const data = await response.json();
+        
+        if (data.exists && data.url) {
+            container.innerHTML = `
+                <img src="${data.url}" alt="Страница ${pageNumber}" 
+                     style="max-width: 100%; height: auto; border: 1px solid #dee2e6; border-radius: 4px;">
+            `;
+        } else {
+            container.innerHTML = `
+                <div style="padding: 2rem; background: #f8f9fa; border-radius: 4px;">
+                    <p style="color: #666; margin-bottom: 0.5rem;">Изображение страницы не найдено</p>
+                    <small style="color: #999;">
+                        Нужно извлечь страницы PDF: 
+                        <code>python scripts/extract_pdf_pages.py ${DOCUMENT_ID}</code>
+                    </small>
+                </div>
+            `;
+        }
+    } catch (error) {
+        container.innerHTML = `
+            <div style="padding: 2rem; background: #f8f9fa; border-radius: 4px; color: #dc3545;">
+                <p>Ошибка загрузки изображения: ${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+// Обновление навигации
+function updateNavigation() {
+    const totalPages = allPagesData.length;
+    const currentPage = currentPageIndex + 1;
+    
+    document.getElementById('currentPageDisplay').textContent = 
+        `Страница ${currentPage} из ${totalPages}`;
+    
+    document.getElementById('prevPageBtn').disabled = currentPageIndex === 0;
+    document.getElementById('nextPageBtn').disabled = currentPageIndex === totalPages - 1;
+    
+    // Обновить input
+    const input = document.getElementById('pageJumpInput');
+    input.value = currentPage;
+    input.max = totalPages;
+}
+
+// Предыдущая страница
+function prevPage() {
+    if (currentPageIndex > 0) {
+        selectPage(currentPageIndex - 1);
+    }
+}
+
+// Следующая страница
+function nextPage() {
+    if (currentPageIndex < allPagesData.length - 1) {
+        selectPage(currentPageIndex + 1);
+    }
+}
+
+// Переход к странице
+function jumpToPage() {
+    const input = document.getElementById('pageJumpInput');
+    const page = parseInt(input.value);
+    
+    if (page >= 1 && page <= allPagesData.length) {
+        selectPage(page - 1);
+    } else {
+        alert(`Введите номер страницы от 1 до ${allPagesData.length}`);
+    }
+}
+
+// Изменить категорию страницы
+async function changeCategory(pageId, category) {
+    try {
+        const response = await fetch(`/api/documents/${DOCUMENT_ID}/pages/${pageId}/category`, {
+            method: 'PUT',
+            headers: {
+                'X-Session-Key': localStorage.getItem('session_key'),
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ category })
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Ошибка изменения категории');
+        }
+        
+        showMessage('Категория изменена!', 'success');
+        
+        // Перезагрузить данные
+        loadPages();
+        
+    } catch (error) {
+        showMessage(error.message, 'error');
+    }
+}
 </script>
 {% endblock %}

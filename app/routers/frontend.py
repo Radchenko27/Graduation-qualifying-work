@@ -149,27 +149,30 @@ async def document_detail_page(request: Request, document_id: int):
     if not session_key:
         return RedirectResponse(url="/login", status_code=302)
     
-    async with httpx.AsyncClient() as client:
-        try:
+    try:
+        async with httpx.AsyncClient(base_url="http://localhost:8000/api") as client:
             # Получаем информацию о документе
             doc_response = await client.get(
-                f"/api/documents/{document_id}",
+                f"/documents/{document_id}",
                 headers={"X-Session-Key": session_key}
             )
-            document = doc_response.json() if doc_response.ok else {}
+            document = doc_response.json() if doc_response.status_code == 200 else {}
             
             # Получаем проект
             if document.get('project_id'):
                 proj_response = await client.get(
-                    f"/api/projects/{document['project_id']}",
+                    f"/projects/{document['project_id']}",
                     headers={"X-Session-Key": session_key}
                 )
-                project = proj_response.json() if proj_response.ok else {}
+                project = proj_response.json() if proj_response.status_code == 200 else {}
             else:
                 project = {}
-        except Exception as e:
-            print(f"ERROR: {e}")
-            return RedirectResponse(url="/documents", status_code=302)
+        
+    except Exception as e:
+        print(f"ERROR document_detail_page: {e}")
+        import traceback
+        traceback.print_exc()
+        return RedirectResponse(url="/documents", status_code=302)
     
     return templates.TemplateResponse("document_detail.html", {
         "request": request,

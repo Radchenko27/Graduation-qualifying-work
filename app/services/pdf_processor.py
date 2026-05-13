@@ -236,14 +236,47 @@ class PDFProcessor:
         
         for drawing in drawings:
             for item in drawing["items"]:
-                if item[0] == "l":  # line
-                    elements["lines"].append(item[1])
-                elif item[0] == "re":  # rect
-                    elements["rects"].append(item[1])
-                elif item[0] == "c":  # curve
-                    elements["curves"].append(item[1])
-                elif item[0] == "qu":  # quad
-                    elements["curves"].append(item[1])
+                item_type = item[0]
+                data = item[1]
+                
+                if item_type == "l":  # line
+                    coords = []
+                    if isinstance(data, (tuple, list)):
+                        for d in data:
+                            if hasattr(d, 'x') and hasattr(d, 'y'):
+                                coords.extend([float(d.x), float(d.y)])
+                            elif isinstance(d, (int, float)):
+                                coords.append(float(d))
+                    if len(coords) >= 4:
+                        elements["lines"].append({
+                            "x1": coords[0], "y1": coords[1],
+                            "x2": coords[2], "y2": coords[3]
+                        })
+                
+                elif item_type == "re":  # rect
+                    if hasattr(data, 'x0'):
+                        elements["rects"].append({
+                            "x0": float(data.x0), "y0": float(data.y0),
+                            "x1": float(data.x1), "y1": float(data.y1)
+                        })
+                    elif isinstance(data, (tuple, list)) and len(data) >= 4:
+                        elements["rects"].append({
+                            "x0": float(data[0]), "y0": float(data[1]),
+                            "x1": float(data[2]), "y1": float(data[3])
+                        })
+                
+                elif item_type in ("c", "qu"):  # curve / quad
+                    coords = []
+                    if isinstance(data, (tuple, list)):
+                        for d in data:
+                            if hasattr(d, 'x') and hasattr(d, 'y'):
+                                coords.extend([float(d.x), float(d.y)])
+                            elif isinstance(d, (int, float)):
+                                coords.append(float(d))
+                    # Group into points
+                    points = [{"x": coords[i], "y": coords[i+1]} 
+                             for i in range(0, len(coords)-1, 2)]
+                    elements["curves"].append(points)
         
         return elements
     
@@ -265,13 +298,18 @@ class PDFProcessor:
         # Получаем блоки текста
         text_blocks = page.get_text("blocks")
         
-        # Получаем таблицы
-        tables = page.find_tables()
+        # Получаем таблицы (создаём textpage явно для избежания ошибки)
+        try:
+            textpage = page.get_textpage()
+            tables = page.find_tables(textpage=textpage)
+            table_count = len(tables.tables)
+        except Exception:
+            table_count = 0
         
         structure = {
             "page_num": page_num,
             "text_blocks": len(text_blocks),
-            "tables": len(tables.tables),
+            "tables": table_count,
             "images": len(page.get_images()),
             "width": page.rect.width,
             "height": page.rect.height,
@@ -295,17 +333,18 @@ class PDFProcessor:
         output_dir: Path,
         extract_images: bool = False,
         extract_text: bool = True,
-        analyze_structure: bool = False,
+        analyze_structure: bool = True,  # По умолчанию True для text_blocks_details
         zoom: float = 1.0
     ) -> Dict:
         """
-        Полная обработка документа с параметрами управления
+        Полная обработка документа с параметрами управления.
+        Всегда сохраняет text_blocks_details для геометрического парсинга.
 
         Args:
             output_dir: Директория для сохранения результатов
             extract_images: Конвертировать страницы в изображения
             extract_text: Извлекать текст из страниц
-            analyze_structure: Анализировать структуру страниц
+            analyze_structure: Анализировать структуру страниц (всегда True)
             zoom: Коэффициент масштабирования для изображений
             
         Returns:
@@ -313,6 +352,9 @@ class PDFProcessor:
         """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Всегда анализируем структуру для text_blocks_details
+        analyze_structure = True
         
         results = {
             "metadata": self.get_metadata(),
@@ -336,18 +378,18 @@ class PDFProcessor:
         if extract_images:
             self.convert_all_pages_to_images(output_dir / "images", zoom=zoom)
 
-        # Анализируем структуру каждой страницы если требуется
+        # Анализируем структуру КАЖДОЙ страницы (всегда)
         for page_num in range(self.doc.page_count):
             page_info = {
                 "page_num": page_num
             }
             
-            if analyze_structure:
-                page_structure = self.analyze_page_structure(page_num)
-                drawing_elements = self.detect_drawing_elements(page_num)
-                page_info["structure"] = page_structure
-                page_info["drawing_elements"] = drawing_elements
-                results["structure"][page_num] = page_structure
+            # Всегда получаем структуру с text_blocks_details
+            page_structure = self.analyze_page_structure(page_num)
+            drawing_elements = self.detect_drawing_elements(page_num)
+            page_info["structure"] = page_structure
+            page_info["drawing_elements"] = drawing_elements
+            results["structure"][page_num] = page_structure
 
             if extract_text:
                 page_info["text"] = self.extract_text_from_page(page_num)
@@ -355,7 +397,14 @@ class PDFProcessor:
             results["pages"].append(page_info)
 
         # Сохраняем результаты в JSON
-        json_output = output_dir / f"{self.pdf_path.stem}_processed.json"
+        # Проверяем имя PDF - если начинается с документа ID, используем его
+        stem = self.pdf_path.stem
+        if stem.startswith("temp_reprocess"):
+            # Временный файл - используем имя из parent директории
+            json_output = output_dir / f"{output_dir.name}_processed.json"
+        else:
+            json_output = output_dir / f"{stem}_processed.json"
+        
         with open(json_output, 'w', encoding='utf-8') as f:
             json.dump(results, f, ensure_ascii=False, indent=2)
         

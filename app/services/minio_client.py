@@ -1,7 +1,9 @@
 import boto3
 from botocore.exceptions import ClientError
+from botocore.config import Config
 from typing import Optional, BinaryIO
 import os
+import time
 
 class MinIOClient:
     """Клиент для работы с MinIO (S3-совместимое хранилище)"""
@@ -27,22 +29,56 @@ class MinIOClient:
             endpoint_url=endpoint_url,
             aws_access_key_id=access_key,
             aws_secret_access_key=secret_key,
-            use_ssl=use_ssl
+            use_ssl=use_ssl,
+            config=Config(
+                signature_version='s3v4',
+                retries={'max_attempts': 3}
+            )
         )
         self.bucket_name = bucket_name
         self._ensure_bucket_exists()
     
-    def _ensure_bucket_exists(self):
-        """Создать бакет если не существует"""
-        try:
-            self.client.head_bucket(Bucket=self.bucket_name)
-            print(f"[OK] MinIO bucket '{self.bucket_name}' уже существует")
-        except ClientError as e:
+    def _ensure_bucket_exists(self, max_retries=3):
+        """Создать бакет если не существует с retry логикой для ошибок времени"""
+        for attempt in range(max_retries):
             try:
-                self.client.create_bucket(Bucket=self.bucket_name)
-                print(f"[OK] Created MinIO bucket: {self.bucket_name}")
-            except ClientError as create_err:
-                print(f"[ERROR] Ошибка создания бакета {self.bucket_name}: {create_err}")
+                self.client.head_bucket(Bucket=self.bucket_name)
+                print(f"[OK] MinIO bucket '{self.bucket_name}' уже существует")
+                return
+            except ClientError as e:
+                error_code = e.response.get('Error', {}).get('Code', '')
+
+                # Ошибка RequestTimeTooSkewed - проблема с синхронизацией времени
+                if error_code == 'RequestTimeTooSkewed':
+                    print(f"[WARN] RequestTimeTooSkewed (попытка {attempt + 1}/{max_retries})")
+                    print(f"[WARN] Синхронизируйте системное время или проверьте настройки часового пояса")
+
+                    if attempt < max_retries - 1:
+                        # Ждём перед повторной попыткой
+                        time.sleep(2)
+                        continue
+
+                # Бакет не существует - пробуем создать
+                if error_code == 'NoSuchBucket':
+                    try:
+                        self.client.create_bucket(Bucket=self.bucket_name)
+                        print(f"[OK] Created MinIO bucket: {self.bucket_name}")
+                        return
+                    except ClientError as create_err:
+                        create_error_code = create_err.response.get('Error', {}).get('Code', '')
+
+                        # Если проблема с временем при создании
+                        if create_error_code == 'RequestTimeTooSkewed':
+                            print(f"[ERROR] RequestTimeTooSkewed при создании бакета (попытка {attempt + 1}/{max_retries})")
+                            if attempt < max_retries - 1:
+                                time.sleep(2)
+                                continue
+
+                        print(f"[ERROR] Ошибка создания бакета {self.bucket_name}: {create_err}")
+                        raise
+
+                # Другая ошибка
+                print(f"[ERROR] Ошибка проверки бакета {self.bucket_name}: {e}")
                 raise
     
     def upload_file(self, file_content: bytes, file_name: str, project_id: int) -> str:
@@ -50,18 +86,50 @@ class MinIOClient:
         Загрузить файл в MinIO и вернуть object_key
         
         Returns:
-            object_key - путь к объекту в MinIO
+            object_key - путь к объекту в MinIO (без префикса bucket)
         """
-        object_key = f"documents/{project_id}/{file_name}"
+        # Object key начинается с project_id, без "documents/" префикса
+        # Bucket имя уже добавляется в URL автоматически
+        object_key = f"{project_id}/{file_name}"
         
-        self.client.put_object(
-            Bucket=self.bucket_name,
-            Key=object_key,
-            Body=file_content,
-            ContentType=self._get_content_type(file_name)
-        )
+        print(f"[INFO] Загрузка файла в MinIO:")
+        print(f"  Bucket: {self.bucket_name}")
+        print(f"  Object Key: {object_key}")
+        print(f"  Full path in MinIO: {self.bucket_name}/{object_key}")
+        print(f"  File Name: {file_name}")
+        print(f"  Size: {len(file_content)} bytes")
         
-        return object_key
+        try:
+            self.client.put_object(
+                Bucket=self.bucket_name,
+                Key=object_key,
+                Body=file_content,
+                ContentType=self._get_content_type(file_name)
+            )
+            
+            print(f"[OK] Файл успешно загружен: {self.bucket_name}/{object_key}")
+            return object_key
+            
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', '')
+            error_msg = e.response.get('Error', {}).get('Message', str(e))
+            
+            print(f"[ERROR] Ошибка загрузки в MinIO:")
+            print(f"  Code: {error_code}")
+            print(f"  Message: {error_msg}")
+            print(f"  Object Key: {object_key}")
+            
+            if error_code == 'RequestTimeTooSkewed':
+                print(f"[ERROR] Проблема с синхронизацией времени!")
+                print(f"[ERROR] Синхронизируйте системное время: w32tm /resync")
+            
+            raise
+            
+        except Exception as e:
+            print(f"[ERROR] Неизвестная ошибка при загрузке: {e}")
+            import traceback
+            traceback.print_exc()
+            raise
     
     def upload_file_obj(self, file_obj: BinaryIO, file_name: str, project_id: int) -> str:
         """
@@ -115,6 +183,19 @@ class MinIOClient:
         Returns:
             presigned URL
         """
+        # Проверяем что endpoint_url корректный
+        if not self.client._endpoint.host.startswith(('http://', 'https://')):
+            # Принудительно устанавливаем корректный endpoint
+            endpoint_url = os.getenv("MINIO_ENDPOINT", "http://localhost:9000")
+            if not endpoint_url.startswith(('http://', 'https://')):
+                endpoint_url = f"http://{endpoint_url}"
+            self.client._endpoint.host = endpoint_url
+        
+        print(f"[INFO] Generating presigned URL:")
+        print(f"  Endpoint: {self.client._endpoint.host}")
+        print(f"  Bucket: {self.bucket_name}")
+        print(f"  Object Key: {object_key}")
+        
         url = self.client.generate_presigned_url(
             'get_object',
             Params={
@@ -123,6 +204,13 @@ class MinIOClient:
             },
             ExpiresIn=expires_in
         )
+        
+        print(f"  Generated URL: {url[:100]}...")
+        
+        # Проверяем что URL корректный
+        if not url.startswith(('http://', 'https://')):
+            raise ValueError(f"Request URL is missing protocol. Generated: {url}")
+        
         return url
     
     @staticmethod

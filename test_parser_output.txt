@@ -1,0 +1,76 @@
+[OK] MinIO bucket 'documents' уже существует
+======================================================================
+ПРОВЕРКА DocumentParser для документа ID=32
+======================================================================
+Traceback (most recent call last):
+  File "C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 941, in do_execute
+    cursor.execute(statement, parameters)
+sqlite3.OperationalError: no such column: documents.page_count
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work\test_parser_flow.py", line 19, in <module>
+    with DocumentParser(doc_id, processed_dir='processed') as parser:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work\app\utils\document_parser.py", line 34, in __init__
+    self.document = crud.Documents.get(self.db, document_id)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work\app\crud.py", line 16, in get
+    return db.get(self.model, id)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work\venv\Lib\site-packages\sqlalchemy\orm\session.py", line 3693, in get
+    return self._get_impl(
+           ^^^^^^^^^^^^^^^
+  File "C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work\venv\Lib\site-packages\sqlalchemy\orm\session.py", line 3873, in _get_impl
+    return db_load_fn(
+           ^^^^^^^^^^^
+  File "C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work\venv\Lib\site-packages\sqlalchemy\orm\loading.py", line 694, in load_on_pk_identity
+    session.execute(
+  File "C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work\venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2362, in execute
+    return self._execute_internal(
+           ^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work\venv\Lib\site-packages\sqlalchemy\orm\session.py", line 2247, in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work\venv\Lib\site-packages\sqlalchemy\orm\context.py", line 305, in orm_execute_statement
+    result = conn.execute(
+             ^^^^^^^^^^^^^
+  File "C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1418, in execute
+    return meth(
+           ^^^^^
+  File "C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work\venv\Lib\site-packages\sqlalchemy\sql\elements.py", line 515, in _execute_on_connection
+    return connection._execute_clauseelement(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1640, in _execute_clauseelement
+    ret = self._execute_context(
+          ^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1846, in _execute_context
+    return self._exec_single_context(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1986, in _exec_single_context
+    self._handle_dbapi_exception(
+  File "C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 2355, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work\venv\Lib\site-packages\sqlalchemy\engine\base.py", line 1967, in _exec_single_context
+    self.dialect.do_execute(
+  File "C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work\venv\Lib\site-packages\sqlalchemy\engine\default.py", line 941, in do_execute
+    cursor.execute(statement, parameters)
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no such column: documents.page_count
+[SQL: SELECT documents.id AS documents_id, documents.project_id AS documents_project_id, documents.doc_type AS documents_doc_type, documents.created_at AS documents_created_at, documents.name AS documents_name, documents.file_path AS documents_file_path, documents.file_hash AS documents_file_hash, documents.page_count AS documents_page_count 
+FROM documents 
+WHERE documents.id = ?]
+[parameters: (32,)]
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\dimar\Desktop\BMSTU_IU5\Graduation-qualifying-work\test_parser_flow.py", line 87, in <module>
+    print(f"\n\u2717 ОШИБКА: {e}")
+  File "C:\Users\dimar\AppData\Local\Programs\Python\Python312\Lib\encodings\cp1251.py", line 19, in encode
+    return codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode character '\u2717' in position 2: character maps to <undefined>

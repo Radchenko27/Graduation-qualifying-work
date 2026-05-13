@@ -31,15 +31,17 @@ services:
       - db
     restart: unless-stopped
 
-  minio:
+minio:
     image: minio/minio:latest
     container_name: minio_storage
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin_password}
+      TZ: ${TZ:-Europe/Moscow}
     volumes:
       - minio_data:/data
+      - /etc/localtime:/etc/localtime:ro
     ports:
       - "9000:9000"
       - "9001:9001"
@@ -51,7 +53,7 @@ services:
       timeout: 10s
       retries: 3
 
-  app:
+app:
     build: .
     container_name: fastapi_app
     environment:
@@ -62,6 +64,7 @@ services:
       MINIO_BUCKET: ${MINIO_BUCKET:-documents}
       MINIO_USE_SSL: "false"
       SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-this-in-production}
+      TZ: ${TZ:-Europe/Moscow}
     ports:
       - "8000:8000"
     depends_on:
@@ -69,6 +72,7 @@ services:
       - minio
     volumes:
       - ./data:/app/data
+      - /etc/localtime:/etc/localtime:ro
     networks:
       - app_network
     restart: unless-stopped

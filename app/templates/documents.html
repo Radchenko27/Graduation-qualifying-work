@@ -38,8 +38,10 @@
                 <td>{{ doc.page_count or 0 }}</td>
             <td class="table-actions">
                 <button class="btn btn-primary btn-sm" onclick="downloadDocument({{ doc.id }}, '{{ doc.name }}')">Скачать</button>
-                <button class="btn btn-info btn-sm" onclick="openDocumentView({{ doc.id }})">Открыть</button>
+                <a href="/documents/{{ doc.id }}" class="btn btn-info btn-sm">Открыть</a>
                 <button class="btn btn-warning btn-sm" onclick="viewDocumentPages({{ doc.id }})">Страницы</button>
+                <button class="btn btn-success btn-sm" onclick="quickParseSpecifications({{ doc.id }}, '{{ doc.name }}')">Спецификации</button>
+                <button class="btn btn-info btn-sm" onclick="quickParseFullDocument({{ doc.id }}, '{{ doc.name }}')">Обработать в Excel</button>
                 <button class="btn btn-danger btn-sm" data-delete="/api/documents/{{ doc.id }}" data-redirect="/documents">Удалить</button>
             </td>
             </tr>
@@ -125,6 +127,17 @@ async function loadProjects() {
         
         const projects = await response.json();
         populateProjectSelects(projects);
+
+        // Если в URL есть project_id — автоматически выбираем проект и фильтруем
+        const urlParams = new URLSearchParams(window.location.search);
+        const preselectedId = urlParams.get('project_id');
+        if (preselectedId) {
+            const select = document.getElementById('projectFilter');
+            if (select) {
+                select.value = preselectedId;
+                loadDocuments();
+            }
+        }
     } catch (error) {
         console.error('Ошибка:', error);
     }
@@ -198,8 +211,10 @@ function renderDocuments(docs) {
             <td>${d.page_count || 0}</td>
             <td class="table-actions">
                 <button class="btn btn-primary btn-sm" onclick="downloadDocument(${d.id}, '${d.name}')">Скачать</button>
-                <button class="btn btn-info btn-sm" onclick="openDocumentView(${d.id})">Открыть</button>
+                <a href="/documents/${d.id}" class="btn btn-info btn-sm">Открыть</a>
                 <button class="btn btn-warning btn-sm" onclick="viewDocumentPages(${d.id})">Страницы</button>
+                <button class="btn btn-success btn-sm" onclick="quickParseSpecifications(${d.id}, '${d.name.replace(/'/g, "\\'")}')">Спецификации</button>
+                <button class="btn btn-info btn-sm" onclick="quickParseFullDocument(${d.id}, '${d.name.replace(/'/g, "\\'")}')">Обработать в Excel</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteDocument(${d.id})">Удалить</button>
             </td>
         </tr>
@@ -377,6 +392,76 @@ function getCategoryNameRu(category) {
 // Функция открытия страницы просмотра документа
 function openDocumentView(documentId) {
     window.location.href = `/documents/${documentId}`;
+}
+
+// Быстрый парсинг спецификаций из списка документов
+async function quickParseSpecifications(documentId, documentName) {
+    if (!confirm(`Парсинг спецификаций документа:\n\n${documentName}\n\nЭкспортировать спецификации в Excel?`)) {
+        return;
+    }
+
+    showMessage('Парсинг спецификаций...', 'info');
+
+    try {
+        const response = await fetch(`/api/documents/${documentId}/parse-specifications?format=excel`, {
+            method: 'POST',
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') }
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Ошибка парсинга спецификаций');
+        }
+        
+        const result = await response.json();
+
+        showMessage(`Спецификации экспортированы:\n${result.output_path}`, 'success');
+
+        // Предлагаем открыть страницу документа для просмотра деталей
+        setTimeout(() => {
+            if (confirm('Спецификации успешно экспортированы!\n\nОткрыть страницу документа для просмотра деталей?')) {
+                window.location.href = `/documents/${documentId}`;
+            }
+        }, 500);
+
+    } catch (error) {
+        showMessage(error.message, 'error');
+    }
+}
+
+// Быстрая обработка всего документа из списка
+async function quickParseFullDocument(documentId, documentName) {
+    if (!confirm(`Обработать ВЕСЬ документ:\n\n${documentName}\n\nБудут обработаны ВСЕ страницы:\n• Спецификации → таблицы\n• Чертежи → обозначения, названия\n• Схемы → элементы\n• Титулы → метаданные\n\nЭкспорт в Excel.`)) {
+        return;
+    }
+
+    showMessage('Обработка документа...', 'info');
+
+    try {
+        const response = await fetch(`/api/documents/${documentId}/parse-full?format=excel`, {
+            method: 'POST',
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') }
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Ошибка обработки документа');
+        }
+        
+        const result = await response.json();
+
+        showMessage(`Документ обработан:\n${result.output_path}`, 'success');
+
+        // Предлагаем открыть страницу документа
+        setTimeout(() => {
+            if (confirm(`✅ Документ успешно обработан!\n\nПуть: ${result.output_path}\n\nОткрыть страницу документа?`)) {
+                window.location.href = `/documents/${documentId}`;
+            }
+        }, 500);
+
+    } catch (error) {
+        showMessage(error.message, 'error');
+    }
 }
 
 document.getElementById('uploadDocForm').addEventListener('submit', async (e) => {
