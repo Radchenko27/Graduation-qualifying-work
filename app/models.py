@@ -53,6 +53,8 @@ class Document(Base):
     file_path = Column(String(1024), nullable=True)
     file_hash = Column(String(255), nullable=True)
     page_count = Column(Integer, nullable=True)  # Количество страниц в документе
+    json_path = Column(String(1024), nullable=True)  # Путь к JSON файлу в MinIO
+    excel_path = Column(String(1024), nullable=True)  # Путь к Excel файлу в MinIO
 
     project = relationship("Project", back_populates="documents")
     drawings = relationship("Drawing", back_populates="document", cascade="all, delete-orphan")

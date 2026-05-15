@@ -14,12 +14,33 @@
         </small>
     </div>
     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-        <button class="btn btn-primary" onclick="downloadDocument()">Скачать</button>
+        <button class="btn btn-primary" onclick="downloadDocument()">Скачать PDF</button>
         <button class="btn btn-warning" onclick="reclassifyDocument()">Переклассифицировать</button>
         <button class="btn btn-success" onclick="showSpecificationPanel()">Спецификации</button>
-        <!-- <button class="btn btn-info" onclick="parseFullDocument('json')">Обработать в JSON</button> -->
+        <button class="btn btn-info" onclick="parseFullDocument('json')">Обработать в JSON</button>
         <button class="btn btn-dark" onclick="parseFullDocument('excel')">Обработать в Excel</button>
-        <button class="btn btn-secondary" onclick="reprocessDocument()" title="Переобработать PDF с text_blocks_details">Обработать в JSON</button>
+        <button class="btn btn-secondary" onclick="reprocessDocument()" title="Переобработать PDF с text_blocks_details">Переобработать</button>
+    </div>
+</div>
+
+<!-- Панель скачивания обработанных файлов -->
+<div id="downloadPanel" class="card" style="margin-bottom: 1rem; display: none;">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+        <h4 style="margin: 0;">📥 Скачать обработанные файлы</h4>
+        <button class="btn btn-sm btn-outline-secondary" onclick="hideDownloadPanel()">Закрыть</button>
+    </div>
+    <div class="card-body">
+        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+            <button id="downloadJsonBtn" class="btn btn-outline-primary" onclick="downloadProcessed('json')" style="display: none;">
+                📄 Скачать JSON
+            </button>
+            <button id="downloadExcelBtn" class="btn btn-outline-success" onclick="downloadProcessed('excel')" style="display: none;">
+                📊 Скачать Excel
+            </button>
+        </div>
+        <small style="color: #666; display: block; margin-top: 0.5rem;">
+            Файлы хранятся в MinIO и доступны для скачивания
+        </small>
     </div>
 </div>
 
@@ -627,9 +648,54 @@ async function parseFullDocument(format) {
         const result = await response.json();
         showMessage(`Документ обработан: ${result.output_path}`, 'success');
 
-        // Показываем модальное окно с результатом
-        alert(`✅ Документ успешно обработан!\n\nФормат: ${format.toUpperCase()}\nПуть: ${result.output_path}\n\nЛисты Excel:\n• Сводка — статистика по категориям\n• Спецификации — все таблицы спецификаций\n• Чертежи — обозначения и названия\n• Элементы_схем — элементы схем\n• Титулы — метаданные`);
+        // Показываем панель скачивания
+        showDownloadPanel(format === 'json');
+        
+    } catch (error) {
+        showMessage(error.message, 'error');
+    }
+}
 
+// Показать панель скачивания
+function showDownloadPanel(hasJson = true) {
+    const panel = document.getElementById('downloadPanel');
+    const jsonBtn = document.getElementById('downloadJsonBtn');
+    const excelBtn = document.getElementById('downloadExcelBtn');
+    
+    panel.style.display = 'block';
+    jsonBtn.style.display = hasJson ? 'inline-block' : 'none';
+    excelBtn.style.display = 'block';
+}
+
+// Скрыть панель скачивания
+function hideDownloadPanel() {
+    document.getElementById('downloadPanel').style.display = 'none';
+}
+
+// Скачать обработанный файл
+async function downloadProcessed(format) {
+    try {
+        const response = await fetch(`/api/documents/${DOCUMENT_ID}/download-processed?format=${format}`, {
+            headers: { 'X-Session-Key': localStorage.getItem('session_key') }
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.detail || 'Ошибка скачивания');
+        }
+        
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `document_${DOCUMENT_ID}_structured.${format === 'json' ? 'json' : 'xlsx'}`;
+        document.body.appendChild(a);
+        a.click();
+        
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        showMessage('Файл скачан!', 'success');
     } catch (error) {
         showMessage(error.message, 'error');
     }

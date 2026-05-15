@@ -879,6 +879,9 @@ def parse_full_document(
     """
     from pathlib import Path
     from ...utils.document_parser import DocumentParser
+    from ...services.minio_client import minio_client
+    import tempfile
+    import os
 
     document = crud.Documents.get(db, document_id)
     if document is None:
@@ -888,7 +891,7 @@ def parse_full_document(
         )
 
     # Проверка доступа к проекту
-    if not crud.ProjectUsers.check_access(db, current_user.id, document.project_id):
+    if document.project_id and not crud.ProjectUsers.check_access(db, current_user.id, document.project_id):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Нет доступа к проекту"
@@ -902,24 +905,70 @@ def parse_full_document(
 
     try:
         with DocumentParser(document_id, processed_dir='processed') as parser:
-            # Для JSON — возвращаем структуру напрямую
+            doc_name = Path(document.name).stem
+            
+            # Для JSON — сохраняем в файл и загружаем в MinIO
             if format.lower() == 'json':
                 structure = parser.parse_document()
-                return structure
+                
+                # Сохраняем JSON во временный файл
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False, encoding='utf-8') as f:
+                    import json
+                    json.dump(structure, f, ensure_ascii=False, indent=2)
+                    temp_json_path = f.name
+                
+                try:
+                    # Загружаем в MinIO
+                    with open(temp_json_path, 'rb') as f:
+                        json_content = f.read()
+                    
+                    project_id = document.project_id or 0
+                    json_file_name = f"{doc_name}_structured.json"
+                    json_object_key = minio_client.upload_file(json_content, json_file_name, project_id)
+                    
+                    # Сохраняем путь в БД
+                    document.json_path = f"minio://{json_object_key}"
+                    db.commit()
+                    
+                    return {
+                        "status": "success",
+                        "document_id": document_id,
+                        "document_name": document.name,
+                        "format": "json",
+                        "output_path": f"minio://{json_object_key}",
+                        "download_url": f"/api/documents/{document_id}/download-processed?format=json",
+                        "message": f"Документ успешно обработан и сохранён в JSON в MinIO"
+                    }
+                finally:
+                    # Удаляем временный файл
+                    if os.path.exists(temp_json_path):
+                        os.unlink(temp_json_path)
 
-            # Для Excel — сохраняем файл и возвращаем путь
+            # Для Excel — сохраняем файл и загружаем в MinIO
             output_dir = Path('output/documents')
             output_dir.mkdir(parents=True, exist_ok=True)
-            doc_name = Path(document.name).stem
-            output_path = parser.export_to_excel(str(output_dir / f"{doc_name}_structured.xlsx"))
+            excel_path = parser.export_to_excel(str(output_dir / f"{doc_name}_structured.xlsx"))
+
+            # Загружаем Excel в MinIO
+            with open(excel_path, 'rb') as f:
+                excel_content = f.read()
+            
+            project_id = document.project_id or 0
+            excel_file_name = f"{doc_name}_structured.xlsx"
+            excel_object_key = minio_client.upload_file(excel_content, excel_file_name, project_id)
+            
+            # Сохраняем путь в БД
+            document.excel_path = f"minio://{excel_object_key}"
+            db.commit()
 
             return {
                 "status": "success",
                 "document_id": document_id,
                 "document_name": document.name,
                 "format": format,
-                "output_path": output_path,
-                "message": f"Документ успешно обработан и сохранён в {format.upper()}"
+                "output_path": f"minio://{excel_object_key}",
+                "download_url": f"/api/documents/{document_id}/download-processed?format=excel",
+                "message": f"Документ успешно обработан и сохранён в {format.upper()} в MinIO"
             }
 
     except FileNotFoundError as e:
@@ -933,6 +982,80 @@ def parse_full_document(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Ошибка обработки документа: {str(e)}"
+        )
+
+
+@router.get("/{document_id}/download-processed")
+def download_processed_document(
+    document_id: int,
+    format: str = "json",
+    current_user: models.User = Depends(get_current_user),
+    db: Session = Depends(db.get_db)
+):
+    """
+    Скачать обработанный файл (JSON или Excel) из MinIO.
+    """
+    from ...services.minio_client import minio_client
+    from fastapi.responses import StreamingIO
+
+    document = crud.Documents.get(db, document_id)
+    if document is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Document not found"
+        )
+
+    # Проверка доступа к проекту
+    if document.project_id and not crud.ProjectUsers.check_access(db, current_user.id, document.project_id):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Нет доступа к проекту"
+        )
+
+    # Определяем путь к файлу в зависимости от формата
+    if format.lower() == 'json':
+        file_path = document.json_path
+        file_name = f"{Path(document.name).stem}_structured.json"
+        content_type = 'application/json'
+    elif format.lower() == 'excel':
+        file_path = document.excel_path
+        file_name = f"{Path(document.name).stem}_structured.xlsx"
+        content_type = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    else:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Неверный формат. Используйте 'json' или 'excel'"
+        )
+
+    if not file_path:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Файл {format.upper()} ещё не сгенерирован. Обработайте документ."
+        )
+
+    try:
+        # Извлекаем object_key из пути minio://
+        object_key = file_path.replace("minio://", "")
+        
+        # Скачиваем файл из MinIO
+        file_content = minio_client.download_file(object_key)
+        
+        # Возвращаем файл
+        from fastapi.responses import Response
+        return Response(
+            content=file_content,
+            media_type=content_type,
+            headers={
+                "Content-Disposition": f"attachment; filename=\"{file_name}\""
+            }
+        )
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка скачивания файла: {str(e)}"
         )
 
 
