@@ -1,0 +1,144 @@
+# Восстановление crud.py
+
+with open('app/crud.py', 'r', encoding='utf-8') as f:
+    content = f.read()
+
+# Найдём класс ProjectUserCRUD и исправим его
+old_class = '''class ProjectUserCRUD(CRUDBase[models.ProjectUser]):
+    def check_access(self, db: Session, user_id: int, project_id: int) -> bool:
+        """Проверить доступ пользователя к проекту (включая shared проекты)"""
+        # Проверка через ProjectUser
+        has_user_access = db.query(models.ProjectUser).filter(
+            models.ProjectUser.user_id == user_id,
+            models.ProjectUser.project_id == project_id
+        ).first() is not None
+    
+        if has_user_access:
+        """Проверить доступ пользователя к проекту (включая владельца и shared проекты)"""
+        # Проверка, является ли пользователь владельцем
+        project = db.query(models.Project).filter(models.Project.id == project_id).first()
+        if project and project.owner_id == user_id:
+            return True
+        
+        # Проверка через ProjectShare
+        has_share_access = db.query(models.ProjectShare).filter(
+            models.ProjectShare.shared_with_id == user_id,
+            models.ProjectShare.project_id == project_id
+        # Проверка через ProjectUser
+        has_user_access = db.query(models.ProjectUser).filter(
+            models.ProjectUser.user_id == user_id,
+            models.ProjectUser.project_id == project_id
+        ).first() is not None
+        
+        if has_user_access:
+            return True
+        
+        # Проверка через ProjectShare
+        has_share_access = db.query(models.ProjectShare).filter(
+            models.ProjectShare.shared_with_id == user_id,
+            models.ProjectShare.project_id == project_id
+        ).first() is not None
+        
+        return has_share_access
+    
+    def get_user_projects(self, db: Session, user_id: int, skip: int = 0, limit: int = 100) -> List[models.Project]:
+        """Получить все проекты пользователя (включая общие)"""
+        # Проекты, где пользователь является участником
+        user_projects = db.query(models.Project).join(
+            models.ProjectUser, models.Project.id == models.ProjectUser.project_id
+        ).filter(
+            models.ProjectUser.user_id == user_id
+        """Получить все проекты пользователя (владельца, участника и shared)"""
+        # Проекты, где пользователь является владельцем
+        owned_projects = db.query(models.Project).filter(
+            models.Project.owner_id == user_id
+        ).offset(skip).limit(limit).all()
+        
+        # Проекты, доступные через sharing
+        shared_projects = db.query(models.Project).join(
+            models.ProjectShare, models.Project.id == models.ProjectShare.project_id
+        # Проекты, где пользователь является участником
+        user_projects = db.query(models.Project).join(
+            models.ProjectUser, models.Project.id == models.ProjectUser.project_id
+        ).filter(
+            models.ProjectShare.shared_with_id == user_id
+            models.ProjectUser.user_id == user_id
+        ).offset(skip).limit(limit).all()
+        
+        # Проекты, доступные через sharing
+        shared_projects = db.query(models.Project).join(
+            models.ProjectShare, models.Project.id == models.ProjectShare.project_id
+        ).filter(
+            models.ProjectShare.shared_with_id == user_id
+        ).offset(skip).limit(limit).all()
+        
+        # Объединяем и убираем дубликаты
+        all_projects = {p.id: p for p in user_projects + shared_projects}
+        all_projects = {p.id: p for p in owned_projects + user_projects + shared_projects}
+        return list(all_projects.values())'''
+
+new_class = '''class ProjectUserCRUD(CRUDBase[models.ProjectUser]):
+    def check_access(self, db: Session, user_id: int, project_id: int) -> bool:
+        """Проверить доступ пользователя к проекту (включая владельца и shared проекты)"""
+        # Проверка, является ли пользователь владельцем
+        project = db.query(models.Project).filter(models.Project.id == project_id).first()
+        if project and project.owner_id == user_id:
+            return True
+        
+        # Проверка через ProjectUser
+        has_user_access = db.query(models.ProjectUser).filter(
+            models.ProjectUser.user_id == user_id,
+            models.ProjectUser.project_id == project_id
+        ).first() is not None
+        
+        if has_user_access:
+            return True
+        
+        # Проверка через ProjectShare
+        has_share_access = db.query(models.ProjectShare).filter(
+            models.ProjectShare.shared_with_id == user_id,
+            models.ProjectShare.project_id == project_id
+        ).first() is not None
+        
+        return has_share_access
+    
+    def get_user_projects(self, db: Session, user_id: int, skip: int = 0, limit: int = 100) -> List[models.Project]:
+        """Получить все проекты пользователя (владельца, участника и shared)"""
+        # Проекты, где пользователь является владельцем
+        owned_projects = db.query(models.Project).filter(
+            models.Project.owner_id == user_id
+        ).offset(skip).limit(limit).all()
+        
+        # Проекты, где пользователь является участником
+        user_projects = db.query(models.Project).join(
+            models.ProjectUser, models.Project.id == models.ProjectUser.project_id
+        ).filter(
+            models.ProjectUser.user_id == user_id
+        ).offset(skip).limit(limit).all()
+        
+        # Проекты, доступные через sharing
+        shared_projects = db.query(models.Project).join(
+            models.ProjectShare, models.Project.id == models.ProjectShare.project_id
+        ).filter(
+            models.ProjectShare.shared_with_id == user_id
+        ).offset(skip).limit(limit).all()
+        
+        # Объединяем и убираем дубликаты
+        all_projects = {p.id: p for p in owned_projects + user_projects + shared_projects}
+        return list(all_projects.values())'''
+
+if old_class in content:
+    content = content.replace(old_class, new_class)
+    print('✓ crud.py исправлен')
+else:
+    print('✗ Не найдено старое содержимое')
+    print('Проверяем наличие class ProjectUserCRUD...')
+    if 'class ProjectUserCRUD' in content:
+        print('  class ProjectUserCRUD найден')
+    else:
+        print('  class ProjectUserCRUD НЕ найден')
+
+with open('app/crud.py', 'w', encoding='utf-8') as f:
+    f.write(content)
+
+print('Готово!')

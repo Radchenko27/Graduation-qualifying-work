@@ -996,7 +996,7 @@ def download_processed_document(
     Скачать обработанный файл (JSON или Excel) из MinIO.
     """
     from ...services.minio_client import minio_client
-    from fastapi.responses import StreamingIO
+    from starlette.responses import StreamingResponse
 
     document = crud.Documents.get(db, document_id)
     if document is None:

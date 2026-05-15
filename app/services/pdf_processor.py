@@ -307,7 +307,7 @@ class PDFProcessor:
             table_count = 0
         
         structure = {
-            "page_num": page_num,
+            "page_num": page_num + 1,  # 1-based для соответствия с PDF
             "text_blocks": len(text_blocks),
             "tables": table_count,
             "images": len(page.get_images()),
@@ -319,7 +319,7 @@ class PDFProcessor:
                     "y0": block[1],
                     "x1": block[2],
                     "y1": block[3],
-                    "text": block[4][:100] if len(block[4]) > 100 else block[4],  # Первые 100 символов
+                    "text": block[4][:500] if len(block[4]) > 500 else block[4],  # Увеличено до 500 символов
                     "block_type": block[6]
                 }
                 for block in text_blocks
@@ -381,7 +381,7 @@ class PDFProcessor:
         # Анализируем структуру КАЖДОЙ страницы (всегда)
         for page_num in range(self.doc.page_count):
             page_info = {
-                "page_num": page_num
+                "page_num": page_num + 1  # 1-based
             }
             
             # Всегда получаем структуру с text_blocks_details
@@ -389,7 +389,8 @@ class PDFProcessor:
             drawing_elements = self.detect_drawing_elements(page_num)
             page_info["structure"] = page_structure
             page_info["drawing_elements"] = drawing_elements
-            results["structure"][page_num] = page_structure
+            # Используем 1-based ключи для соответствия с PDF
+            results["structure"][page_num + 1] = page_structure
 
             if extract_text:
                 page_info["text"] = self.extract_text_from_page(page_num)

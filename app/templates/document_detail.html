@@ -14,12 +14,10 @@
         </small>
     </div>
     <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
-        <button class="btn btn-primary" onclick="downloadDocument()">Скачать PDF</button>
+        <button class="btn btn-primary" onclick="downloadDocument()">Скачать</button>
         <button class="btn btn-warning" onclick="reclassifyDocument()">Переклассифицировать</button>
-        <button class="btn btn-success" onclick="showSpecificationPanel()">Спецификации</button>
         <button class="btn btn-info" onclick="parseFullDocument('json')">Обработать в JSON</button>
         <button class="btn btn-dark" onclick="parseFullDocument('excel')">Обработать в Excel</button>
-        <button class="btn btn-secondary" onclick="reprocessDocument()" title="Переобработать PDF с text_blocks_details">Переобработать</button>
     </div>
 </div>
 
@@ -628,6 +626,35 @@ async function parseSpecifications(format) {
 
 // Универсальный парсинг всего документа
 async function parseFullDocument(format) {
+    // При JSON — переобработка с text_blocks_details
+    if (format === 'json') {
+        if (!confirm('Переобработать PDF с сохранением text_blocks_details?\n\nЭто обновит processed JSON файл с геометрическими данными блоков текста.')) {
+            return;
+        }
+        
+        showMessage('Переобработка PDF... Это может занять несколько минут', 'info');
+
+        try {
+            const response = await fetch(`/api/documents/${DOCUMENT_ID}/reprocess`, {
+                method: 'POST',
+                headers: { 'X-Session-Key': localStorage.getItem('session_key') }
+            });
+            
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.detail || 'Ошибка переобработки');
+            }
+            
+            const result = await response.json();
+            showMessage(`✅ ${result.message}`, 'success');
+            
+        } catch (error) {
+            showMessage(error.message, 'error');
+        }
+        return;
+    }
+    
+    // При Excel — обычный парсинг
     if (!confirm(`Обработать ВЕСЬ документ и экспортировать в ${format.toUpperCase()}?\n\nБудут обработаны все страницы в зависимости от их категории.`)) {
         return;
     }
@@ -696,33 +723,6 @@ async function downloadProcessed(format) {
         document.body.removeChild(a);
         
         showMessage('Файл скачан!', 'success');
-    } catch (error) {
-        showMessage(error.message, 'error');
-    }
-}
-
-// Переобработка документа (с text_blocks_details)
-async function reprocessDocument() {
-    if (!confirm('Переобработать PDF с сохранением text_blocks_details?\n\nЭто обновит processed JSON файл с геометрическими данными блоков текста.')) {
-        return;
-    }
-    
-    showMessage('Переобработка PDF... Это может занять несколько минут', 'info');
-
-    try {
-        const response = await fetch(`/api/documents/${DOCUMENT_ID}/reprocess`, {
-            method: 'POST',
-            headers: { 'X-Session-Key': localStorage.getItem('session_key') }
-        });
-        
-        if (!response.ok) {
-            const error = await response.json();
-            throw new Error(error.detail || 'Ошибка переобработки');
-        }
-        
-        const result = await response.json();
-        showMessage(`✅ ${result.message}`, 'success');
-        
     } catch (error) {
         showMessage(error.message, 'error');
     }

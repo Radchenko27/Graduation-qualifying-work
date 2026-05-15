@@ -140,31 +140,36 @@ class DocumentParser:
 
     def _get_page_blocks(self, page_key: str) -> List[Dict[str, Any]]:
         """Получить text_blocks_details для страницы из processed JSON."""
-        # pdf_processor сохраняет structure с ЧИСЛОВЫМИ ключами: structure[0], structure[1]
-        # page_key приходит как строка: "0", "1"
+        # pdf_processor теперь сохраняет structure с 1-based ключами: structure[1], structure[2]...
+        # page_key приходит как строка: "1", "2", "3"... (соответствует page_number)
         page_num_int = int(page_key)
 
         # Формат pdf_processor: structure[page_num]["text_blocks_details"]
         structure = self.processed_data.get('structure', {})
         if isinstance(structure, dict):
-            # Пробуем числовой ключ
+            # Пробуем 1-based ключ сначала
             if page_num_int in structure:
                 return structure[page_num_int].get('text_blocks_details', [])
             # Пробуем строковый ключ
-            if page_key in structure:
-                return structure[page_key].get('text_blocks_details', [])
+            if str(page_num_int) in structure:
+                return structure[str(page_num_int)].get('text_blocks_details', [])
+            # Fallback на 0-based для старых файлов
+            if page_num_int - 1 in structure:
+                return structure[page_num_int - 1].get('text_blocks_details', [])
+            if str(page_num_int - 1) in structure:
+                return structure[str(page_num_int - 1)].get('text_blocks_details', [])
 
         # Альтернативный формат: pages[page_num]["structure"]["text_blocks_details"]
         pages = self.processed_data.get('pages', [])
-        if isinstance(pages, list) and page_num_int < len(pages):
-            page_struct = pages[page_num_int].get('structure', {})
+        if isinstance(pages, list) and page_num_int <= len(pages):
+            page_struct = pages[page_num_int - 1].get('structure', {}) if page_num_int > 0 else {}
             return page_struct.get('text_blocks_details', [])
 
         # Legacy формат
         blocks_data = self.processed_data.get('text_blocks_details', {})
         if isinstance(blocks_data, dict):
-            if page_key in blocks_data:
-                return blocks_data[page_key]
+            if str(page_num_int) in blocks_data:
+                return blocks_data[str(page_num_int)]
             if page_num_int in blocks_data:
                 return blocks_data[page_num_int]
 
@@ -198,7 +203,8 @@ class DocumentParser:
 
         for page in self.all_pages:
             page_num = page.page_number
-            page_key = str(page_num - 1) if page_num > 0 else "0"
+            # Используем 1-based ключ для text и structure
+            page_key = str(page_num)
             page_text = text_pages.get(page_key, "")
             page_blocks = self._get_page_blocks(page_key)
 
@@ -569,20 +575,90 @@ class DocumentParser:
         }
 
     def _extract_all_specification_rows(self, data: Dict) -> List[Dict]:
-        """Извлечь все строки спецификаций со всех страниц"""
+        """
+        Извлечь все строки спецификаций со всех страниц.
+        Использует text_blocks_details для группировки по строкам таблицы.
+        """
         rows = []
+        
         for page_key, page_data in data.get("pages", {}).items():
-            if page_data.get("category") == "specification":
-                page_num = page_data.get("page_number")
-                page_rows = page_data.get("data", {}).get("rows", [])
-                columns = page_data.get("data", {}).get("columns", [])
-
+            if page_data.get("category") != "specification":
+                continue
+            
+            page_num = page_data.get("page_number")
+            page_rows = page_data.get("data", {}).get("rows", [])
+            columns = page_data.get("data", {}).get("columns", [])
+            text_blocks = page_data.get("text_blocks_details", [])
+            
+            # Если есть распаршенные строки - используем их
+            if page_rows and columns:
                 for row in page_rows:
                     flat_row = {"Страница": page_num}
-                    # Используем оригинальные label из columns
                     for col in columns:
                         flat_row[col["label"]] = row.get(col["key"], "")
                     rows.append(flat_row)
+            
+            # Если есть text_blocks_details - группируем по Y координате
+            elif text_blocks:
+                # Группируем блоки по Y с допуском 10px
+                y_tolerance = 10
+                rows_by_y = {}
+                
+                for block in text_blocks:
+                    y0 = block.get('y0', 0)
+                    # Находим ближайшую группу
+                    found_group = None
+                    for existing_y in rows_by_y.keys():
+                        if abs(existing_y - y0) <= y_tolerance:
+                            found_group = existing_y
+                            break
+                    
+                    if found_group is not None:
+                        rows_by_y[found_group].append(block)
+                    else:
+                        rows_by_y[y0] = [block]
+                
+                # Сортируем строки сверху вниз
+                sorted_y = sorted(rows_by_y.keys())
+                
+                # Первая строка - заголовок
+                header = None
+                if sorted_y:
+                    header_blocks = sorted(rows_by_y[sorted_y[0]], key=lambda b: b['x0'])
+                    header = [b.get('text', '').strip() for b in header_blocks if b.get('text', '').strip()]
+                
+                # Остальные строки - данные таблицы
+                for y in sorted_y[1:]:
+                    row_blocks = sorted(rows_by_y[y], key=lambda b: b['x0'])
+                    row_values = [b.get('text', '').strip() for b in row_blocks if b.get('text', '').strip()]
+                    
+                    if not row_values:
+                        continue
+                    
+                    # Создаём строку с привязкой к заголовку
+                    flat_row = {"Страница": page_num}
+                    
+                    if header:
+                        for i, value in enumerate(row_values):
+                            if i < len(header):
+                                flat_row[header[i]] = value
+                            else:
+                                flat_row[f"Колонка_{i+1}"] = value
+                    else:
+                        # Без заголовка - нумеруем колонки
+                        for i, value in enumerate(row_values):
+                            flat_row[f"Колонка_{i+1}"] = value
+                    
+                    # Пропускаем строки-заголовки (содержат слова "Позиция", "Обозначение" и т.п.)
+                    if any(kw in str(flat_row.values()) for kw in ['Позиция', 'Обозначение', 'Наименование', 'Кол', 'Прим']):
+                        # Обновляем заголовок если это он
+                        if 'Позиция' in str(row_values) or 'Обозначение' in str(row_values):
+                            header = row_values
+                            continue
+                        continue
+                    
+                    rows.append(flat_row)
+        
         return rows
 
     def _extract_drawings(self, data: Dict) -> List[Dict]:
