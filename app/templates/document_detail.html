@@ -141,8 +141,12 @@
                 <div id="pageDetailsContent">
                     <div style="text-align: center; padding: 2rem; color: #666;">
                         <p>Выберите страницу для просмотра деталей</p>
-                    </div>
-                </div>
+    </div>
+</div>
+
+<!-- Скрытые поля с путями к обработанным файлам -->
+<input type="hidden" id="hasJsonPath" value="{{ 'true' if document.json_path else 'false' }}">
+<input type="hidden" id="hasExcelPath" value="{{ 'true' if document.excel_path else 'false' }}">
             </div>
         </div>
     </div>
@@ -152,6 +156,15 @@
 {% block scripts %}
 <script>
 const DOCUMENT_ID = {{ document.id }};
+
+// При загрузке страницы — показываем кнопки скачать, если файлы уже есть в MinIO
+document.addEventListener('DOMContentLoaded', function() {
+    const hasJson = document.getElementById('hasJsonPath').value === 'true';
+    const hasExcel = document.getElementById('hasExcelPath').value === 'true';
+    if (hasJson || hasExcel) {
+        showDownloadPanel(hasJson, hasExcel);
+    }
+});
 
 // Глобальные переменные для просмотра страниц (должны быть объявлены ДО loadPages!)
 let allPagesData = [];
@@ -648,6 +661,9 @@ async function parseFullDocument(format) {
             const result = await response.json();
             showMessage(`✅ ${result.message}`, 'success');
             
+            // Показываем панель скачивания с кнопкой JSON
+            showDownloadPanel(true, false);
+            
         } catch (error) {
             showMessage(error.message, 'error');
         }
@@ -675,8 +691,8 @@ async function parseFullDocument(format) {
         const result = await response.json();
         showMessage(`Документ обработан: ${result.output_path}`, 'success');
 
-        // Показываем панель скачивания
-        showDownloadPanel(format === 'json');
+        // Показываем панель скачивания (обе кнопки)
+        showDownloadPanel(true, true);
         
     } catch (error) {
         showMessage(error.message, 'error');
@@ -684,14 +700,14 @@ async function parseFullDocument(format) {
 }
 
 // Показать панель скачивания
-function showDownloadPanel(hasJson = true) {
+function showDownloadPanel(hasJson = true, hasExcel = true) {
     const panel = document.getElementById('downloadPanel');
     const jsonBtn = document.getElementById('downloadJsonBtn');
     const excelBtn = document.getElementById('downloadExcelBtn');
     
     panel.style.display = 'block';
     jsonBtn.style.display = hasJson ? 'inline-block' : 'none';
-    excelBtn.style.display = 'block';
+    excelBtn.style.display = hasExcel ? 'inline-block' : 'none';
 }
 
 // Скрыть панель скачивания

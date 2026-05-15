@@ -1175,9 +1175,25 @@ def reprocess_document(
         
         # Переименовываем файл, если он назван неправильно
         json_file = output_dir / f"temp_reprocess_processed.json"
+        final_json_name = f"{output_dir.name}_processed.json"
+        final_json_path = output_dir / final_json_name
         if json_file.exists():
-            new_name = f"{output_dir.name}_processed.json"
-            json_file.rename(output_dir / new_name)
+            json_file.rename(final_json_path)
+        
+        # Загружаем processed JSON в MinIO
+        json_object_key = None
+        if final_json_path.exists():
+            with open(final_json_path, 'rb') as f:
+                json_content = f.read()
+            
+            project_id = document.project_id or 0
+            doc_name = Path(document.name).stem
+            json_file_name = f"{doc_name}_structured.json"
+            json_object_key = minio_client.upload_file(json_content, json_file_name, project_id)
+            
+            # Сохраняем путь в БД
+            document.json_path = f"minio://{json_object_key}"
+            db.commit()
         
         # Проверяем наличие text_blocks_details
         has_blocks = False
@@ -1192,7 +1208,8 @@ def reprocess_document(
             "output_dir": str(output_dir),
             "pages_processed": len(result.get('text', {})),
             "has_text_blocks": has_blocks,
-            "structure": result.get('structure', {})
+            "json_path": document.json_path,
+            "download_url": f"/api/documents/{document_id}/download-processed?format=json" if document.json_path else None
         }
 
     except Exception as e:
