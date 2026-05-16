@@ -126,8 +126,8 @@ function renderProjects(projects) {
         
         return `
         <tr>
-            <td><strong>${p.name}</strong></td>
-            <td>${(p.description || '').substring(0, 50)}${(p.description || '').length > 50 ? '...' : ''}</td>
+            <td><strong>${escapeHtml(p.name)}</strong></td>
+            <td>${escapeHtml((p.description || '').substring(0, 50))}${(p.description || '').length > 50 ? '...' : ''}</td>
             <td>${categoryBadge}</td>
             <td>${p.created_at ? p.created_at.substring(0, 10) : '-'}</td>
             <td class="table-actions">

@@ -91,13 +91,27 @@ def read_project(
 
     Требует аутентификации
     """
-    project = crud.Projects.get(db, project_id)
-    if project is None:
+    try:
+        print(f"DEBUG read_project: Fetching project {project_id} for user {current_user.id}")
+        project = crud.Projects.get(db, project_id)
+        if project is None:
+            print(f"DEBUG read_project: Project {project_id} not found")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Project not found"
+            )
+        print(f"DEBUG read_project: Project found: {project.id} - {project.name}")
+        return project
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"ERROR in read_project: {e}")
+        traceback.print_exc()
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found"
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Ошибка получения проекта: {str(e)}"
         )
-    return project
 
 
 @router.put("/{project_id}", response_model=schemas.ProjectRead)

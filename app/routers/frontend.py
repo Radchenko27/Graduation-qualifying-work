@@ -60,11 +60,23 @@ async def projects_page(request: Request):
     if not session_key:
         return RedirectResponse(url="/login", status_code=302)
     
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(base_url="http://127.0.0.1:8000", timeout=10.0) as client:
         try:
-            response = await client.get("/projects/", headers={"X-Session-Key": session_key})
-            projects = response.json() if response.ok else []
-        except:
+            response = await client.get("/api/projects/", headers={"X-Session-Key": session_key})
+            print(f"DEBUG projects_page: API status={response.status_code}")
+            if 200 <= response.status_code < 300:
+                projects = response.json()
+                print(f"DEBUG projects_page: {len(projects)} projects loaded: {[p.get('id') for p in projects]}")
+            else:
+                print(f"DEBUG projects_page: API error, body={response.text[:200]}")
+                projects = []
+        except httpx.TimeoutException:
+            print(f"ERROR projects_page: Timeout")
+            projects = []
+        except Exception as e:
+            print(f"ERROR projects_page: {e}")
+            import traceback
+            traceback.print_exc()
             projects = []
     
     return templates.TemplateResponse("projects.html", {
@@ -82,21 +94,34 @@ async def project_detail_page(request: Request, project_id: int):
         print(f"ERROR: No session key for project {project_id}")
         return RedirectResponse(url="/login", status_code=302)
     
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(base_url="http://127.0.0.1:8000", timeout=10.0) as client:
         try:
-            url = f"http://127.0.0.1:8000/api/projects/{project_id}"
+            url = f"/api/projects/{project_id}"
             response = await client.get(url, headers={"X-Session-Key": session_key})
             print(f"DEBUG: API request to {url}, status={response.status_code}")
+            
+            if response.status_code == 401:
+                print(f"ERROR: Session invalid for project {project_id}")
+                return RedirectResponse(url="/login", status_code=302)
+            
+            if response.status_code == 404:
+                print(f"ERROR: Project {project_id} not found")
+                return RedirectResponse(url="/projects?error=not_found", status_code=302)
+            
             if response.status_code >= 400:
                 print(f"DEBUG: API response body={response.text[:200]}")
-                raise HTTPException(status_code=404, detail="Проект не найден")
+                return RedirectResponse(url="/projects?error=api_error", status_code=302)
+            
             project = response.json()
             print(f"DEBUG project detail: project = {project}")
-        except HTTPException:
-            raise
+        except httpx.TimeoutException:
+            print(f"ERROR: Timeout fetching project {project_id}")
+            return RedirectResponse(url="/projects?error=timeout", status_code=302)
         except Exception as e:
             print(f"ERROR: {e}")
-            raise HTTPException(status_code=404, detail="Проект не найден")
+            import traceback
+            traceback.print_exc()
+            return RedirectResponse(url="/projects?error=exception", status_code=302)
     
     return templates.TemplateResponse("project_detail.html", {
         "request": request,

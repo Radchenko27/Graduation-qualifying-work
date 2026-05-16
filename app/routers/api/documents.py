@@ -3,6 +3,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date
+from pathlib import Path
 import hashlib
 import io
 import json
@@ -996,7 +997,6 @@ def download_processed_document(
     Скачать обработанный файл (JSON или Excel) из MinIO.
     """
     from ...services.minio_client import minio_client
-    from starlette.responses import StreamingResponse
 
     document = crud.Documents.get(db, document_id)
     if document is None:
